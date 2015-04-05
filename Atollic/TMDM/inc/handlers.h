@@ -11,6 +11,9 @@
 #ifndef __HANDLERS_H
 #define __HANDLERS_H
 
+#define SPI_MESSAGE_LENGTH	28
+
+
 int __eXTI15_10_IRQHandler(void * arg);
 int __eXTI9_5_IRQHandler(void * arg);
 int __eTH_IRQHandler(void * arg);

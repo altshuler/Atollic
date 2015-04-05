@@ -32,9 +32,15 @@
 #include "stm32f2xx.h"
 #include "FreeRTOS.h"			// E.A. Line added
 #include "Queue.h"				// E.A. Line added
+#include "hcmdtask.h"			// E.A. Line added
+#include "hcmd.h"				// E.A. Line added
+#include "Msg_type.h"			// E.A. Line added
+#include "Drive_task.h"			// E.A. Line added
 #include "board.h"				// E.A. Line added
 #include "irqhndl.h"			// E.A. Line added
 #include "root_task.h"			// E.A. Line added
+
+
 
 
 
@@ -61,16 +67,13 @@
 #define ROOT_TASK_PRIO    	( tskIDLE_PRIORITY + 15 )		// E.A. Line added
 
 
-#define N_CTL			2
 
-#ifdef KUKU
+
 
 extern xQueueHandle 		hCmdMbx;
 extern xQueueHandle 		intHostTXQueue;
-extern xQueueHandle     	MotionQueue;
+//extern xQueueHandle     	MotionQueue;
 extern xQueueHandle			DriveIntQueue;
-extern xQueueHandle 		readoutOutQ;
-extern xQueueHandle 		readoutInQ;
 
 extern const char *ctlRxServerQueueName[N_CTL]; 
 extern const char *ctlTxServerQueueName[N_CTL];
@@ -91,18 +94,15 @@ extern const char *ctlTxServerQueueName[N_CTL];
 #define READOUT_TX_QUEUE_SIZE	8
 #define READOUT_RX_QUEUE_SIZE	8
 
-#define TRAVEL_PIN				1
+#ifdef KUKU
 
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */  
-void Time_Update(void);
-void Delay(uint32_t nCount);
-void drive1_tx_task(void *para);
-void drive2_tx_task(void *para);
-void DriveInterpTask(void *para);
+
 void enc_tx_task(void *para);
 void motion_task(void *para);
 #endif
+void DriveInterpTask(void *para);
 void GPIO_Config(void);
 void ToggleLed4(void * pvParameters);
 
