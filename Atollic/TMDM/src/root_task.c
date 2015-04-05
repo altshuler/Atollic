@@ -17,7 +17,13 @@
 
 #include <freertos.h>
 #include <task.h>
+#include <dev.h>
+#include <gio.h>
+#include "drive_task.h"
+#include "membuf.h"
+#include "packetbuf.h"
 #include "root_task.h"
+#include "hcmd.h"
 #include "main.h"
 
 
@@ -33,12 +39,14 @@ xTaskHandle ctlTxServerTaskHndl[N_CTL] = {NULL,NULL};
 xTaskHandle CbitTaskHndl = NULL;
 xTaskHandle MotionTaskHndl = NULL;
 
-#ifdef KUKU
+
 
 const char *ctlRxServerTaskName[N_CTL] = {"ctlRx1_task", "ctlRx2_task"}; 
 const char *ctlTxServerTaskName[N_CTL] = {"ctlTx1_task", "ctlTx2_task"};
 const char *ctlRxServerQueueName[N_CTL] = {"ctlInQ[0]", "ctlInQ[1]"}; 
 const char *ctlTxServerQueueName[N_CTL] = {"ctlOutQ[0]", "ctlOutQ[1]"};
+
+
 
 char cmdBuffersMemory[(CMD_BUFFER_SIZE+sizeof(PACKETBUF_HDR)+MEM_BUF_HEADER_SIZE)*CMD_BUFFERS];
 MEMBUF_POOL cmdBuffers;
@@ -50,10 +58,7 @@ MEMBUF_POOL cmdResBuffers;
 extern struct sCtlServerParam  ctlServerConfig[N_CTL];
 extern Uart_Params readoutDevParams;
 extern Uart_Params ctlDevParams[N_CTL];
-extern struct sReadoutServerParam  readoutServerConfig;
 
-extern struct sIpSettings ipSettings;
-struct sAppIpSettings AppipSettings;
 extern uint32_t AbsEncOffset;
 
 //extern Spi_Params spiParams2;
@@ -65,7 +70,7 @@ GIO_Handle  uartInputHandle[6]={0};
 
 GIO_Handle  uartOutputHandle[6]={0};
 
-#endif
+
 
 
 
@@ -79,14 +84,22 @@ void root_task(void *para)
 	#endif
 	#endif
 
-	
+
+
+
+
+		/* Initialize shared memory buffers pools*/
+	initMemBufPool(&cmdBuffers,cmdBuffersMemory,sizeof(cmdBuffersMemory),CMD_BUFFER_SIZE+sizeof(PACKETBUF_HDR),CMD_BUFFERS);
+	//initMemBufPool(&cmdResBuffers,cmdResBuffersMemory,sizeof(cmdResBuffersMemory),CMD_RES_BUFFER_SIZE+sizeof(PACKETBUF_HDR),CMD_RES_BUFFERS);
 	
 	   /* Toggle LED4  every 250ms */
 	  xTaskCreate(ToggleLed4,( signed char * ) "LED4", configMINIMAL_STACK_SIZE, NULL, LED_TASK_PRIO, NULL);
-	
+
+	 /* Start Host command interpriter task  */
+	 xTaskCreate( hCmdTask, ( signed char * ) "HCmd_task", configMINIMAL_STACK_SIZE*2 , NULL, HCMD_TASK_PRIO, NULL );	
 
 	  /* Start DriveInterpTask: Sending commands and Receiving responce from Drivers   */
-	   //xTaskCreate( DriveInterpTask, ( signed char * ) "DriveInterpTask", configMINIMAL_STACK_SIZE*2 , NULL, DRIVE_INT_TASK_PRIO, NULL );
+	   xTaskCreate( DriveInterpTask, ( signed char * ) "DriveInterpTask", configMINIMAL_STACK_SIZE*2 , NULL, DRIVE_INT_TASK_PRIO, NULL );
 	
 	   /* Start CBIT Task: CBIT Process   */
 	   //xTaskCreate( CBITTask, ( signed char * ) "CBITTask", configMINIMAL_STACK_SIZE , NULL, CBIT_TASK_PRIO, NULL );
@@ -95,11 +108,11 @@ void root_task(void *para)
 	   //xTaskCreate( motion_task, ( signed char * ) "MotionTask", configMINIMAL_STACK_SIZE , NULL, MOTION_TASK_PRIO, NULL );
 
 
-//	for (i=0;i<N_CTL;i++)
-//	{
-//		xTaskCreate(ctlRxServerTask, (signed portCHAR *)ctlRxServerTaskName[i], configMINIMAL_STACK_SIZE*3, &ctlServerConfig[i], DRIVE_RX_TASK_PRIO, &ctlRxServerTaskHndl[i]);
-//		xTaskCreate(ctlTxServerTask, (signed portCHAR *)ctlTxServerTaskName[i], configMINIMAL_STACK_SIZE*2, &ctlServerConfig[i], DRIVE_TX_TASK_PRIO, &ctlTxServerTaskHndl[i]);
-//	}
+	for (i=0;i<N_CTL;i++)
+	{
+		xTaskCreate(ctlRxServerTask, (signed portCHAR *)ctlRxServerTaskName[i], configMINIMAL_STACK_SIZE*3, &ctlServerConfig[i], DRIVE_RX_TASK_PRIO, &ctlRxServerTaskHndl[i]);
+		xTaskCreate(ctlTxServerTask, (signed portCHAR *)ctlTxServerTaskName[i], configMINIMAL_STACK_SIZE*2, &ctlServerConfig[i], DRIVE_TX_TASK_PRIO, &ctlTxServerTaskHndl[i]);
+	}
 
 
 	//xTaskCreate(ctlRxServerTask, (signed portCHAR *)ctlRxServerTaskName[0], configMINIMAL_STACK_SIZE*3, &ctlServerConfig[0], DRIVE_RX_TASK_PRIO, &ctlRxServerTaskHndl[0]);

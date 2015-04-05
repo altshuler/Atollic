@@ -36,22 +36,15 @@
 #include "payload.h"
 #include "packetbuf.h"
 #include "hcmd.h"
-//#include "commands.h"
-//#include "responses.h"
 #include "packetbuf.h"
 #include "payload.h"
-#include "hostframe.h"
-//#include "ver.h"
-//#include "board.h"
+//#include "hostframe.h"
 #include "timestamp.h"
 #include "inthost.h"
-//#include "service_task.h"
-#include "data.h"
-//#include "ver.h"
-//#include "Weight_task.h"
+//#include "data.h"
 #include "main.h"
-#include "initDrive.h"
-#include "bootinfo.h"
+//#include "initDrive.h"
+//#include "bootinfo.h"
 #include "sysport.h"
 
 
@@ -139,7 +132,6 @@ extern uint8_t pbit_cnt;
 extern struct sBootInfoArea bootInfo;
 void (*bootloaderReq)(void) __attribute__ ((section (".bootloaderreq")));
 extern uint32_t AbsEncOffset;
-extern uSSI AbsEncoderData;
 extern struct sIpSettings ipSettings;
 
 
@@ -199,6 +191,7 @@ int processDriveForward(void *b,uint32_t ch_num)
 		
 	rxbuff=(struct sPacketBufHdr *)(b);
 	
+#ifdef KUKU	
 	memset(pr, 0, ((sizeof(char))*100));
 	pr->length=SetDriveRsp(((char*)PAYLOAD_DATA_START(b)),PAYLOAD_START(pr), ch_num&0xFF);
 	resp_packet=makeSinglePacketResponse(&cmdResBuffers,pr,RESP_BUFFER_GET_TIMEOUT);
@@ -211,7 +204,7 @@ int processDriveForward(void *b,uint32_t ch_num)
 		}
 	}
 
-
+#endif
 	return 1;
 }
 
@@ -253,7 +246,7 @@ int processHostCommand(void *b,uint32_t ch_num)
 	
 	//CB_CMD_COMPLETION_FN_t waitForPostResponseCommandCompletion=NULL;
 	//uint16_t ret_len;
-	
+#ifdef KUKU
 	if (b==NULL)
 		return 1; // return the buffer on exit
 	ph=(PAYLOAD_HEADER *)PAYLOAD_BUFFER_DATA_STR(b);
@@ -425,7 +418,7 @@ int processHostCommand(void *b,uint32_t ch_num)
 				retMemBuf(drive_packet);
 			}
 		}
-
+#endif
 	return 1;
 }
 

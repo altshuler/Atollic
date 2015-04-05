@@ -27,15 +27,15 @@
 #include <dma.h>
 #include <assert.h>
 
-//#include "crc16.h"
+#include "crc16.h"
 //#include "initDrive.h"
 #include "drive_task.h"
 #include "drive_comm.h"
 #include "packetbuf.h"
 #include "msg_type.h"
-//#include "interface.h"
-//#include "itoa.h"
-//#include "AbsEncoderSSI.h"
+#include "interface.h"
+#include "itoa.h"
+#include "AbsEncoderSSI.h"
 #include "handlers.h"
 
 #define CTL_RX_BUFFER_SIZE	(12+sizeof(PACKETBUF_HDR))
@@ -163,9 +163,6 @@ __IO uint16_t CCR4_Val = 150;
 __IO uint16_t Brake_PWM_Val = 10000;
 
 uint16_t Timer_4_Period = 0;
-uint16_t Timer_9_Period = 0;
-uint16_t Channel1Pulse = 0;
-uint16_t Channel2Pulse = 0;
 uint16_t Channel3Pulse = 0;
 uint16_t Channel4Pulse = 0;
 
@@ -180,6 +177,7 @@ extern xQueueHandle             hCmdMbx;
 __IO uint32_t Timer1Clk=300000;
 
 struct sDriverStatus DriveStatus=DRIVER_INIT_STATUS;
+uSSI AbsEncoderData;	
 
 
 uint8_t ForwardFlag_1=0;
@@ -209,10 +207,14 @@ struct sFwdStat
 } ;
 struct sFwdStat drv_1,drv_2;
 
+uint16_t MccDataIn[14];
+uint16_t MccDataOut[14]={0xAC53,0xA5A5,0x3412,0x6745,0xAB89,0x0,0x46E1,0x0,0xFFFF,0x0,0xFFFF,0x0,0xFFFF,0x0};
+
 static int ctlRxCallback(void *arg, int status, void *addr, size_t size);
 void handleCtlIncomingData(char *Buffer, size_t len, struct sFromCtl_packetizer *CtlRxPack, uint16_t fwd, uint16_t chan);
 void initCtlDevParams(void);
 void initCtlxDevParams(Uart_Params *devp, struct sCtlServerParam *param);
+unsigned short calc_checksum (unsigned short  *buffer, size_t len);
 
 //static int ctl1_tx_buffcall(void *buf, void *arg);
 //static int ctl2_tx_buffcall(void *buf, void *arg);
@@ -359,7 +361,7 @@ void ctlRxServerTask(void *para)
 		{
 			if (xQueueReceive(ctlInQ[ctlCommParam->ctlId], &ctl_in_msg, CTL_RX_TIMEOUT))
 			{
-#ifdef KUKU			
+			
 				if (ctl_in_msg.hdr.bit.type==MSG_TYPE_DATA_BLK)
 				{
 					if (ctl_in_msg.buf)
@@ -402,7 +404,7 @@ void ctlRxServerTask(void *para)
 						}
 					}
 				}
-#endif				
+			
 			}
 			else
 			{
@@ -473,7 +475,7 @@ void ctlTxServerTask(void *para)
 	{
 		if (xQueueReceive(ctlOutQ[ctlCommParam->ctlId],&ctl_out_msg,portMAX_DELAY)==pdPASS)
 		{
-#ifdef KUKU	
+	
 			if (ctl_out_msg.hdr.bit.type==MSG_TYPE_PACKET)
 			{
 				if (ctl_out_msg.buf)
@@ -527,7 +529,7 @@ void ctlTxServerTask(void *para)
 					
 				}
 			}
-#endif			
+		
 		}
 		else if (ctl_out_msg.hdr.bit.type==MSG_TYPE_CMD)
 		{
@@ -571,12 +573,8 @@ void handleCtlIncomingData(char *Buffer, size_t len, struct sFromCtl_packetizer 
 void DriveInterpTask(void *para)
 {
 	MSG_HDR drive_in_msg;
-	//MSG_HDR msg1;
 	PACKETBUF_HDR *pktBuf=NULL;
 	PACKETBUF_HDR *TmpBuf=NULL;
-	//PACKETBUF_HDR *TmpPktBuf=NULL;
-	//PACKETBUF_HDR *TmpPktBuf1=NULL;
-	//PACKETBUF_HDR *TmpPktBuf2=NULL;
 	struct sDriverCmd DriverCmd1;
 	struct sDriverCmd DriverCmd2;
 	char command[12];
@@ -586,6 +584,8 @@ void DriveInterpTask(void *para)
 	uint32_t interpScanSkipAcc=0;
 	uint8_t color;
 	uint16_t chksum;
+	uMCC_IN Data;
+
 	
 	#ifdef TASK_STACK_CHECK
 	unsigned portBASE_TYPE uxHighWaterMark;
@@ -629,7 +629,7 @@ void DriveInterpTask(void *para)
 	key=__disableInterrupts();
 	/* TIM3 configuration */
 	TIM_Config();
-	TIM_ITConfig(TIM3, TIM_IT_CC1 | TIM_IT_CC2 , ENABLE); //Enable Driver 1 Status and timeout Timers
+	TIM_ITConfig(TIM3, TIM_IT_CC1 /*| TIM_IT_CC2*/ , ENABLE); //Enable Driver 1 Status and timeout Timers
 	__restoreInterrupts(key);
 
 	memset(&drv_1,0,sizeof(drv_1));
@@ -638,10 +638,10 @@ void DriveInterpTask(void *para)
 	{	
 		if (xQueueReceive( DriveIntQueue, &drive_in_msg,( portTickType ) portMAX_DELAY ))
 		{	
-#ifdef KUKU
+			pktBuf=(PACKETBUF_HDR *)drive_in_msg.buf;
+			
 			if (drive_in_msg.hdr.bit.type==MSG_TYPE_PACKET)
 			{
-				pktBuf=(PACKETBUF_HDR *)drive_in_msg.buf;
 				
 				if (pktBuf)
 				{
@@ -706,8 +706,21 @@ void DriveInterpTask(void *para)
 							color= *PACKETBUF_OFFSET_DATA(pktBuf,4) & FRAME_COLOR;
 						
 							tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,2)); //Calculate Current Offset*/
-							if((tmp==3205)||(tmp==205))
-							GPIO_ResetBits(LED3_GPIO_PORT, LED3_PIN);
+							
+							if(tmp==DRV_CMD_CURRENT)//A.M.
+							{
+								tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,5));
+								if(tmp&0x8000)
+									MccDataOut[9]|=(1<<2);//Motor On
+								else
+									MccDataOut[9]&=~(1<<2);//Motor Off
+								MccDataOut[3]=(tmp&0x7FFF)<<4;
+							}
+							else if (tmp==DRV_CMD_ERROR)
+							{
+								MccDataOut[9]&=~(1<<2);//Motor Off
+								MccDataOut[3]=0;
+							}
 
 							if(color==FWD_FRAME_COLOR)
 							{
@@ -732,7 +745,7 @@ void DriveInterpTask(void *para)
 								//		drv_2.scan_tx++;
 								//	
 								//}
-								//retMemBuf(pktBuf);
+								retMemBuf(pktBuf);
 							}
 							else if (color==CMD_FRAME_COLOR)
 							{
@@ -750,8 +763,22 @@ void DriveInterpTask(void *para)
 							color= *PACKETBUF_OFFSET_DATA(pktBuf,4) & FRAME_COLOR;
 							tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,2)); 
 							if(tmp==284)
-								GPIO_ResetBits(LED3_GPIO_PORT, LED3_PIN);
+								GPIO_ResetBits(LED1_GPIO_PORT, LED1_PIN);
 							
+							if(tmp==DRV_CMD_CURRENT)//A.M.
+							{
+								tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,5));
+								if(tmp&0x8000)
+									MccDataOut[9]|=(1<<3);//Motor On
+								else
+									MccDataOut[9]&=~(1<<3);//Motor Off
+								MccDataOut[1]=(tmp&0x7FFF)<<4;
+							}
+							else if (tmp==DRV_CMD_ERROR)
+							{
+								MccDataOut[9]&=~(1<<3);//Motor Off
+								MccDataOut[1]=0;
+							}
 
 							if(color==FWD_FRAME_COLOR)
 							{
@@ -783,19 +810,119 @@ void DriveInterpTask(void *para)
 			}
 			else if(drive_in_msg.hdr.bit.type==MSG_TYPE_EVENT)
 			{
-				if (drive_in_msg.hdr.bit.source==MSG_SRC_ISR_TIM) //Message is coming from TMR ISR
+				if (drive_in_msg.hdr.bit.source==MSG_SRC_ISR_SPI) //Message is coming from SPI ISR
 				{
-					if (interpScanSkipCount==0)
+					if (pktBuf)
 					{
-						PrepareFirstCommand(drive_in_msg.data, &DriverCmd1, SCAN_FRAME_COLOR);
+						memcpy(MccDataIn, PACKETBUF_DATA(pktBuf), sizeof(MccDataIn));
 						
-						if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
-							drv_1.scan_tx++;
-					}
-					else
-					{
-						interpScanSkipCount--;
-						drv_1.scan_skip++;
+						Data = (uMCC_IN)MccDataIn[2];
+						
+						if(DriveStatus.State1==0x1)
+						{
+							if(Data.bit.AzMotor)
+							{
+								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+								DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[1])<<4))>>4;
+							}
+							else
+								PrepareFirstCommand(DRV_STATE_MOTOR_OFF,&DriverCmd1,SCAN_FRAME_COLOR);
+
+							if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+								drv_1.scan_tx++;
+
+							DriveStatus.State1=Data.bit.AzMotor;
+						}
+						else
+						{
+							if(Data.bit.AzMotor)
+							{
+								PrepareFirstCommand(DRV_STATE_MOTOR_ON,&DriverCmd1,SCAN_FRAME_COLOR);
+
+								if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+									drv_1.scan_tx++;
+
+								vTaskDelay(1);
+								
+								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+								DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[1])<<4))>>4;
+
+								if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+									drv_1.scan_tx++;
+							}
+							else
+							{
+								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+								DriverCmd1.DrvData.data1= 0;
+								
+								if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+									drv_1.scan_tx++;
+
+							}
+								DriveStatus.State1=Data.bit.AzMotor;
+						}
+
+
+
+						if(DriveStatus.State2==0x1)
+						{
+							if(Data.bit.ElMotor)
+							{
+								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
+								DriverCmd2.DrvData.data1= ((int16_t)((MccDataIn[0])<<4))>>4;
+							}
+							else
+								PrepareFirstCommand(DRV_STATE_MOTOR_OFF,&DriverCmd2,SCAN_FRAME_COLOR);
+
+
+							if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+								drv_2.scan_tx++;
+
+							DriveStatus.State2=Data.bit.ElMotor;
+						}
+						else
+						{
+							if(Data.bit.ElMotor)
+							{
+								PrepareFirstCommand(DRV_STATE_MOTOR_ON,&DriverCmd2,SCAN_FRAME_COLOR);
+
+								if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+									drv_2.scan_tx++;
+
+								vTaskDelay(1); 
+								
+								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+								DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[0])<<4))>>4;
+
+								if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+									drv_2.scan_tx++;
+							}
+							else
+							{
+								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
+								DriverCmd2.DrvData.data1= 0;
+								
+								if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+									drv_2.scan_tx++;
+
+							}							
+								DriveStatus.State2=Data.bit.ElMotor;
+						}						
+						
+					  /*if (interpScanSkipCount==0)
+						{
+							PrepareFirstCommand(drive_in_msg.data, &DriverCmd1, SCAN_FRAME_COLOR);
+							
+							if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+								drv_1.scan_tx++;
+						}
+						else
+						{
+							interpScanSkipCount--;
+							drv_1.scan_skip++;
+						}
+					*/
+						retMemBuf(pktBuf);
 					}
 				}
 			}
@@ -835,13 +962,13 @@ void DriveInterpTask(void *para)
 			entering the task. */
 			uxHighWaterMark = uxTaskGetStackHighWaterMark( NULL );
 			#endif
-#endif
+//#endif
 		}		
 	}
 }
 
 
-#ifdef KUKU
+
 int sendPacketToDriveInt(void *packet, uint16_t hdr, uint32_t timeout, uint16_t dst_chan)
 {
 	MSG_HDR msg;
@@ -965,6 +1092,7 @@ unsigned char  BuildDrivePckt(char *buf, uint16_t cmd, uint8_t subcmd, unsigned 
 }
 
 
+
 static int ctlRxCallback(void *arg, int status, void *addr, size_t size)
 {
 	MSG_HDR msg;
@@ -1032,61 +1160,6 @@ void TIM_Config(void)
   if (Timer_4_Sem!=NULL)
 		vQueueAddToRegistry( Timer_4_Sem, (signed char *)"Timer_4_Sem");
   //xSemaphoreTake(Timer_4_Sem,portMAX_DELAY);
-
-
-
- 
-  /* Compute the value to be set in ARR regiter to generate signal frequency at 20 Khz */
-  Timer_9_Period = (SystemCoreClock / 20000 ) - 1;
-  /* Compute CCR1 value to generate a duty cycle at 50% for channel 1 */
-  Channel1Pulse = (uint16_t) (((uint32_t) 5 * (Timer_9_Period - 1)) / 10);
-  /* Compute CCR2 value to generate a duty cycle at 50%  for channel 2  */
-  Channel2Pulse = (uint16_t) (((uint32_t) 5 * (Timer_9_Period - 1)) / 10);
-
-  /* Compute the value to be set in ARR regiter to generate signal frequency at 20 Khz */
-	Timer_4_Period = Timer_9_Period/2;
-  /* Compute CCR3 value to generate a duty cycle at 10% for channel 1 */
-  Channel3Pulse = (uint16_t) (((uint32_t) 3 * (Timer_4_Period - 1)) / 10);
-  /* Compute CCR4 value to generate a duty cycle at 10%  for channel 2  */
-  Channel4Pulse = (uint16_t) (((uint32_t) 3 * (Timer_4_Period - 1)) / 10);
-
-  /* TIM9 clock enable */
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM9 , ENABLE);
-  
-  /* Time Base configuration */
-  TIM_TimeBaseStructure.TIM_Prescaler = 0;
-  TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-  TIM_TimeBaseStructure.TIM_Period = Timer_9_Period;
-  TIM_TimeBaseStructure.TIM_ClockDivision = 0;
-  TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
-
-  TIM_TimeBaseInit(TIM9, &TIM_TimeBaseStructure);
-
-  /* Channel 1, 2 Configuration in PWM mode */
-  TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;
-  TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
-  TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;
-  TIM_OCInitStructure.TIM_Pulse = 0x0/*Channel1Pulse*/;
-  TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
-  TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCNPolarity_High;
-  TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
-  TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCIdleState_Reset;
-
-  TIM_OC1Init(TIM9, &TIM_OCInitStructure);
-
-  TIM_OCInitStructure.TIM_Pulse = 0x0/*Channel2Pulse*/;
-  TIM_OC2Init(TIM9, &TIM_OCInitStructure);
-
-
-  /* TIM9 counter enable */
-  TIM_Cmd(TIM9, ENABLE);
-
-  /* TIM9 Main Output Enable */
-  TIM_CtrlPWMOutputs(TIM9, ENABLE);
-
-  GPIO_SetBits(BREAK_M1N_GPIO_PORT, BREAK_M1N_PIN | BREAK_M2N_PIN);
-
-
 
 
   
@@ -1281,8 +1354,29 @@ void PrepareFirstCommand(uint16_t data, struct sDriverCmd *DrvCmd, uint8_t frame
 			DrvCmd->parameters=COMM_TYPE_SET|DATA_TYPE_FLOAT|(frameColor & FRAME_COLOR);
 			DrvCmd->DrvData.data2=DriveStatus.VelocityCmd;
 		}
+		else if(data==DRV_STATE_SET_CURR)
+		{
+			//GPIO_SetBits(LED3_GPIO_PORT, LED3_PIN);
+			DrvCmd->cmd=DRV_CMD_CURRENT;
+			DrvCmd->subcmd=0;
+			DrvCmd->parameters=COMM_TYPE_SET|DATA_TYPE_INT|(frameColor & FRAME_COLOR);
+			DrvCmd->DrvData.data1=0;
+		}
 }
-#endif
 
+unsigned short calc_checksum (unsigned short  *buffer, size_t len)
+{
+	unsigned short crc=0;
 
+	while (len--)
+	{
+		crc += *buffer;
+
+		// Move on to the next element
+		buffer++;
+	}
+
+	// Return the cumulative checksum value
+	return crc;
+}
 

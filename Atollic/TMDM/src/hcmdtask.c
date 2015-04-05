@@ -31,7 +31,7 @@
 /**************************************************************************/
 #include "msg_type.h"
 #include "membuf.h"
-#include "hostframe.h"
+//#include "hostframe.h"
 #include "packetbuf.h"
 #include "pbuffer.h"
 #include "hcmd.h"
@@ -83,9 +83,8 @@ void hCmdTask(void *para)
 	uxHighWaterMark = uxTaskGetStackHighWaterMark( NULL );
 	#endif
 
-	#ifdef KUKU
-	/* Initialize  interface queue*/
-	hCmdMbx = xQueueCreate( HCMD_QUEUE_SIZE, sizeof(MSG_HDR) );
+	
+
 	if( hCmdMbx == NULL )
 	{
 		// Failed to create the queue.
@@ -95,10 +94,7 @@ void hCmdTask(void *para)
 			vTaskDelay(10);
 		}
 	}
-	#endif
 	
-	
-	//initCommandProcessor();	
 	
 	initHostInterface(&intHost, 0);
 	

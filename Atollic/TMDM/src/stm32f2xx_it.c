@@ -158,14 +158,6 @@ void DebugMon_Handler(void)
   */
 void EXTI15_10_IRQHandler(void)
 {
-#ifdef KUKU
-  if(EXTI_GetITStatus(ETH_LINK_EXTI_LINE) != RESET)
-  {
-    Eth_Link_ITHandler(DP83848_PHY_ADDRESS);
-    /* Clear interrupt pending bit */
-    EXTI_ClearITPendingBit(ETH_LINK_EXTI_LINE);
-  }
-#else
 	ENTER_ISR();
 	if ((*irqHandler[EXTI15_10_IRQn])(irqHandlerArg[EXTI15_10_IRQn]))
 	{
@@ -180,7 +172,6 @@ void EXTI15_10_IRQHandler(void)
 		//taskYIELD();
 	}
 	EXIT_ISR();
-#endif
 }
 
 
@@ -192,65 +183,19 @@ void EXTI15_10_IRQHandler(void)
   */
 void EXTI9_5_IRQHandler(void)
 {
-
-#ifdef KUKU
-MSG_HDR msg;
-portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
-uint8_t EmergFlag=0;
-
-  if(EXTI_GetITStatus(EXTI_Line7) != RESET)
-  {
-    
-    /* Clear the EXTI line 7 pending bit */
-    EXTI_ClearITPendingBit(EXTI_Line7);
-	EmergFlag=1;
-	SysParams.EmergencyState |= EMERGENCY_1_ON;
-	SysParams.AllOkFlag=STATUS_FAIL;
-  }
-  else if(EXTI_GetITStatus(EXTI_Line8) != RESET)
-  {
-    
-    /* Clear the EXTI line 8 pending bit */
-    EXTI_ClearITPendingBit(EXTI_Line8);
-	EmergFlag=1;
-	SysParams.EmergencyState |= EMERGENCY_2_ON;
-	SysParams.AllOkFlag=STATUS_FAIL;
-  }
-
-	if(EmergFlag==1)
+	ENTER_ISR();
+	if ((*irqHandler[EXTI9_5_IRQn])(irqHandlerArg[EXTI9_5_IRQn]))
 	{
-		Brake_1_Control(DISABLE);
-		Brake_2_Control(DISABLE);
-
-		msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_EMERG, MSG_TYPE_DRV_1);
-		msg.data=DRV_STATE_MOTOR_OFF;
-		xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
-		
-
-		msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_EMERG, MSG_TYPE_DRV_2);
-		xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
-		if( xHigherPriorityTaskWoken )
-		{
-			// Actual macro used here is port specific.
-			taskYIELD();
-		}
-    }
-#else
-		ENTER_ISR();
-		if ((*irqHandler[EXTI9_5_IRQn])(irqHandlerArg[EXTI9_5_IRQn]))
-		{
-			/* Clear the EXTI lines 9-5 pending bits */
-			//EXTI_ClearITPendingBit(EXTI_Line9|EXTI_Line8|EXTI_Line7|EXTI_Line6|EXTI_Line5);
-			taskYIELD();
-		}
-		else
-		{
-			/* Clear the EXTI lines 9-5 pending bits */
-			//EXTI_ClearITPendingBit(EXTI_Line9|EXTI_Line8|EXTI_Line7|EXTI_Line6|EXTI_Line5);
-		}
-		EXIT_ISR();
-
-#endif
+		/* Clear the EXTI lines 9-5 pending bits */
+		//EXTI_ClearITPendingBit(EXTI_Line9|EXTI_Line8|EXTI_Line7|EXTI_Line6|EXTI_Line5);
+		taskYIELD();
+	}
+	else
+	{
+		/* Clear the EXTI lines 9-5 pending bits */
+		//EXTI_ClearITPendingBit(EXTI_Line9|EXTI_Line8|EXTI_Line7|EXTI_Line6|EXTI_Line5);
+	}
+	EXIT_ISR();
 }
 
 
@@ -366,42 +311,10 @@ void USART6_IRQHandler(void)
 
 void SPI1_IRQHandler (void)
 {
-#ifdef KUKU
-	MSG_HDR msg;
-	portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
-
-	if (SPI_I2S_GetITStatus(SPI1, SPI_I2S_IT_RXNE) == SET)
-	  {
-	  	SPI_ClearITPendingBit(SPI1,SPI_I2S_IT_RXNE);
-		Enc_Int_Flag++;
-		
-			if(Enc_Int_Flag==1)
-			{
-				AbsEncoderCnt.raw32Data=(uint32_t)SPI_I2S_ReceiveData(SPI1);
-				AbsEncoderCnt.raw32Data=AbsEncoderCnt.raw32Data<<16;
-				SPI_I2S_SendData(SPI1,0x5555);
-			}
-			else
-			{
-				Enc_Int_Flag=0;
-				AbsEncoderCnt.raw32Data|= (uint32_t)SPI_I2S_ReceiveData(SPI1);
-				AbsEncoderCnt.raw32Data=((AbsEncoderCnt.raw32Data&0x7FFFFFFF)>>3);
-				msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_TIM, MSG_TYPE_ENC);
-				xQueueSendFromISR(MotionQueue,&msg,&xHigherPriorityTaskWoken);
-				
-				if( xHigherPriorityTaskWoken )
-				{
-					// Actual macro used here is port specific.
-					taskYIELD();
-				}	
-			}
-	  }
-#else
-		ENTER_ISR();
-		if ((*irqHandler[SPI1_IRQn])(irqHandlerArg[SPI1_IRQn]))
-			taskYIELD();
-		EXIT_ISR();
-#endif
+	ENTER_ISR();
+	if ((*irqHandler[SPI1_IRQn])(irqHandlerArg[SPI1_IRQn]))
+		taskYIELD();
+	EXIT_ISR();
 }
 
 
@@ -698,102 +611,10 @@ void DMA2_Stream7_IRQHandler(void)
 void TIM4_IRQHandler(void)
 {
 
-#ifdef KUKU
-	MSG_HDR msg;
-	portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
-
-  if (TIM_GetITStatus(TIM4, TIM_IT_CC1) != RESET)
-  {
-    TIM_ClearITPendingBit(TIM4, TIM_IT_CC1);
-
-	if(DriveStatus.Drive2PacketSent==0)
-	{
-		msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_TIM, MSG_TYPE_DRV_2);
-		msg.data=DRV_STATE_STATUS;
-		//xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
-		if( xHigherPriorityTaskWoken )
-		{
-			// Actual macro used here is port specific.
-			taskYIELD();
-		}
-	}
-
-	capture_4 = TIM_GetCapture1(TIM4);
-    TIM_SetCompare1(TIM4, capture_4 + T4_CCR1_Val);
-
-  }
-   else if (TIM_GetITStatus(TIM4, TIM_IT_CC2) != RESET)
-  {
-    TIM_ClearITPendingBit(TIM4, TIM_IT_CC2);
-
-   if(DriveStatus.Drive2PacketSent==1)
-   {
-   		portENTER_CRITICAL();
-		DriveStatus.Drive2PacketSent=0;
-   		DriveStatus.Drive2TimeoutCnt++;
-		portEXIT_CRITICAL();
-		
-		if(DriveStatus.Drive2TimeoutCnt==MAX_TX_RETRY)
-		{
-		#ifdef KUKU
-			TIM_ITConfig(TIM4, TIM_IT_CC1 | TIM_IT_CC2, DISABLE);
-			portENTER_CRITICAL() ;
-			DriveStatus.Drive2TimeoutCnt=0;
-			SysParams.Drive2Status=STATUS_FAIL;
-			SysParams.AllOkFlag=STATUS_FAIL;
-			portEXIT_CRITICAL();
-		#endif	
-		}
-		else
-		{
-	   		xSemaphoreGiveFromISR(Timer_4_Sem,&xHigherPriorityTaskWoken);
-			if( xHigherPriorityTaskWoken )
-			{
-				// Actual macro used here is port specific.
-				taskYIELD();
-			}
-
-			msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_TIM, MSG_TYPE_DRV_2);
-			msg.data=DriveStatus.State2;
-			//xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
-			if( xHigherPriorityTaskWoken )
-			{
-				// Actual macro used here is port specific.
-				taskYIELD();
-			}
-		}
-   }
-   //else 
-   	//DriveStatus.Drive2TimeoutCnt=0;
-   
-    //capture_4 = TIM_GetCapture2(TIM4);
-    //TIM_SetCompare2(TIM4, capture_4 + CCR2_Val);
-	TIM_ITConfig(TIM4, TIM_IT_CC2, DISABLE);
-  }
-  else if (TIM_GetITStatus(TIM4, TIM_IT_CC3) != RESET)
-  {
-    TIM_ClearITPendingBit(TIM4, TIM_IT_CC3);
-
-	GPIO_ToggleBits(BREAK_PWM_M1_GPIO_PORT, BREAK_PWM_M1_PIN);
-    capture_4 = TIM_GetCapture3(TIM4);
-    TIM_SetCompare3(TIM4, capture_4 + Brake_PWM_Val);
-  }
-  else
-  {
-    TIM_ClearITPendingBit(TIM4, TIM_IT_CC4);
-
-	GPIO_ToggleBits(BREAK_PWM_M1_GPIO_PORT, BREAK_PWM_M2_PIN);
-    capture_4 = TIM_GetCapture4(TIM4);
-    TIM_SetCompare4(TIM4, capture_4 + Brake_PWM_Val);
-  }
-  #else
-  
 	ENTER_ISR();
 	if ((*irqHandler[TIM4_IRQn])(irqHandlerArg[TIM4_IRQn]))
 		taskYIELD();
 	EXIT_ISR();
-
-  #endif
 }
 
 
@@ -807,104 +628,10 @@ void TIM4_IRQHandler(void)
   */
 void TIM3_IRQHandler(void)
 {
-#ifdef KUKU 
-  MSG_HDR msg;
-  portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
-  
-  if (TIM_GetITStatus(TIM3, TIM_IT_CC1) != RESET)
-  {
-  	SysParams.Timestamp++;
-    TIM_ClearITPendingBit(TIM3, TIM_IT_CC1);
-	if(DriveStatus.Drive1PacketSent==0)
-	{
-		//GPIO_ToggleBits(LED3_GPIO_PORT, LED3_PIN);	
-		msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_TIM, MSG_TYPE_EVENT);
-		msg.data=DRV_STATE_POS_CUR;
-		xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
-		if( xHigherPriorityTaskWoken )
-		{
-			// Actual macro used here is port specific.
-			taskYIELD();
-		}
-	}
-
-	capture_3 = TIM_GetCapture1(TIM3);
-    TIM_SetCompare1(TIM3, capture_3 + T3_CCR1_Val);
-  }
-  else if (TIM_GetITStatus(TIM3, TIM_IT_CC2) != RESET)
-  {
-    TIM_ClearITPendingBit(TIM3, TIM_IT_CC2);
-
-   if(DriveStatus.Drive1PacketSent==1)
-   {
-   		portENTER_CRITICAL();
-		DriveStatus.Drive1PacketSent=0;
-   		DriveStatus.Drive1TimeoutCnt++;
-		portEXIT_CRITICAL();
-		
-		if(DriveStatus.Drive1TimeoutCnt==MAX_TX_RETRY)
-		{
-		#ifdef KUKU
-			TIM_ITConfig(TIM3, TIM_IT_CC1 | TIM_IT_CC2, DISABLE);
-			portENTER_CRITICAL() ;
-			DriveStatus.Drive1TimeoutCnt=0;
-			SysParams.Drive1Status=STATUS_FAIL;
-			SysParams.AllOkFlag=STATUS_FAIL;
-			portEXIT_CRITICAL();
-		#endif	
-		}
-		else
-		{
-	   		xSemaphoreGiveFromISR(Timer_3_Sem,&xHigherPriorityTaskWoken);
-			if( xHigherPriorityTaskWoken )
-			{
-				// Actual macro used here is port specific.
-				taskYIELD();
-			}
-
-			msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_TIM, MSG_TYPE_DRV_1);
-			msg.data=DriveStatus.State1;
-			//xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
-			if( xHigherPriorityTaskWoken )
-			{
-				// Actual macro used here is port specific.
-				taskYIELD();
-			}
-		}
-   }
-   //else 
-   	//DriveStatus.Drive1TimeoutCnt=0;
-   
-    //capture_3 = TIM_GetCapture2(TIM3);
-    //TIM_SetCompare2(TIM3, capture_3 + CCR2_Val);
-	TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-  }
-  else if (TIM_GetITStatus(TIM3, TIM_IT_CC3) != RESET)
-  {
-    TIM_ClearITPendingBit(TIM3, TIM_IT_CC3);
-
-    GPIO_ToggleBits(ONE_SHOT1_TRIGN_GPIO_PORT, ONE_SHOT1_TRIGN_PIN | ONE_SHOT2_TRIGN_PIN);
-    capture_3 = TIM_GetCapture3(TIM3);
-    TIM_SetCompare3(TIM3, capture_3 + CCR3_Val);
-  }
-  else
-  {
-    TIM_ClearITPendingBit(TIM3, TIM_IT_CC4);
-	
-	SPI_I2S_SendData(SPI1,0x5555);
-
-	capture_3 = TIM_GetCapture4(TIM3);
-    TIM_SetCompare4(TIM3, capture_3 + CCR4_Val);
-  }
-
-#else
 	ENTER_ISR();
 	if ((*irqHandler[TIM3_IRQn])(irqHandlerArg[TIM3_IRQn]))
 		taskYIELD();
 	EXIT_ISR();
-
-
-#endif
 }
 
 

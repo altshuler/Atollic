@@ -17,9 +17,9 @@
 extern const IODEV_Fxns Usart_IODEVFXNS;
 //extern const IODEV_Fxns Spi_IODEVFXNS;
 extern Uart_Params ctlDevParams[];
-extern Uart_Params readoutDevParams;
+//extern Uart_Params readoutDevParams;
 //extern Spi_Params spiParams0;
-extern i2c_Params i2cParams0;
+//extern i2c_Params i2cParams0;
 
 /* /Uart2 */
 extern void initCtl1DevParams(void);
@@ -28,14 +28,14 @@ extern void initCtl1DevParams(void);
 extern void initCtl2DevParams(void);
 
 /* /Uart6 */
-extern void initReadoutDevParams(void);
+//extern void initReadoutDevParams(void);
 
 
 /* /Spi0 */
 //extern void SpiUserInit0(void);
 
 /* /i2c1 */
-extern void i2cUserInit0(void);
+//extern void i2cUserInit0(void);
 
 
 
@@ -43,12 +43,12 @@ const DEV_Tinit _DEV_initFxn[]=
 {
 	initCtl1DevParams, /* /Uart2 */
 	initCtl2DevParams, /* /Uart3 */
-	initReadoutDevParams, /* /Uart6 */
-	i2cUserInit0		/* /i2c0 */
+//	initReadoutDevParams, /* /Uart6 */
+//	i2cUserInit0		/* /i2c0 */
 };
 
 
-const int _DEV_numStaticDevs = 4;
+const int _DEV_numStaticDevs = 2;	//4
 DEV_TableElem _DEV_staticDevTable[] = 
 {
 	/* /Uart1 */
@@ -82,7 +82,9 @@ DEV_TableElem _DEV_staticDevTable[] =
 				NULL			 /* pointer to device global data */
 		}
 	
-	},
+	}
+#ifdef KUKU
+	,
 	/* /Uart5 */
 	{
 		{
@@ -115,6 +117,7 @@ DEV_TableElem _DEV_staticDevTable[] =
 			}
 
 		}	
+#endif	
 };
 	
 

@@ -23,8 +23,12 @@
 #include "main.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "dev.h"
+#include "../st_dma/st_dma.h"
 #include "cpu_util.h"
 #include "oshooks.h"
+#include "Mcc_SPI.h"
+#include "AbsEncoderSSI.h"
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
@@ -81,41 +85,31 @@ int main(void)
        system_stm32f2xx.c file
      */
   RCC_GetClocksFreq(&clkStatus);
+  
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA1|RCC_AHB1Periph_DMA2, ENABLE);
 
   initIrqHandlerTable();
 
   GPIO_Config();
 
-/*
-while(1)
-{
-	for(i=0;i<1000000;i++);
-	GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
-	  i=0;
-	
-}
-*/
 
   /* Initialize devices */
-  //DEV_init();
-  //initDmaManager();
+  DEV_init();
+  initDmaManager();
 
-
+  Init_MCC_SPI();
 
   
   /* Create OS objects. */
-/*	if ((hCmdMbx=xQueueCreate(HCMD_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
+	if ((hCmdMbx=xQueueCreate(HCMD_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
 		  vQueueAddToRegistry( hCmdMbx, (signed char *)"hCmdMbx");
 	if ((DriveIntQueue=xQueueCreate(DRIVE_INT_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
 		  vQueueAddToRegistry( DriveIntQueue, (signed char *)"DriveIntQueue");
-	if ((MotionQueue=xQueueCreate(MOTION_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
-			  vQueueAddToRegistry( MotionQueue, (signed char *)"MotionQueue");
-	if ((intHostTXQueue=xQueueCreate(HOST_TX_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
-			  vQueueAddToRegistry( intHostTXQueue, (signed char *)"intHostTXQueue");
-	if ((readoutOutQ=xQueueCreate(READOUT_TX_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
-			  vQueueAddToRegistry( readoutOutQ, (signed char *)"readoutOutQ");
-	if ((readoutInQ=xQueueCreate(READOUT_RX_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
-			  vQueueAddToRegistry( readoutInQ, (signed char *)"readoutInQ");
+//	if ((MotionQueue=xQueueCreate(MOTION_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
+//			  vQueueAddToRegistry( MotionQueue, (signed char *)"MotionQueue");
+//	if ((intHostTXQueue=xQueueCreate(HOST_TX_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
+//			  vQueueAddToRegistry( intHostTXQueue, (signed char *)"intHostTXQueue");
+
 
 	
 	for (i=0;i<N_CTL;i++)
@@ -125,7 +119,7 @@ while(1)
 		if ((ctlOutQ[i]=xQueueCreate(CTL_TX_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
 			vQueueAddToRegistry( ctlOutQ[i], (signed char *)ctlTxServerQueueName[i]);
 	}
-*/
+
 
 	/* Start Root Task task */
 	xTaskCreate(root_task,( signed char * ) "root", configMINIMAL_STACK_SIZE*2, NULL, ROOT_TASK_PRIO, &rootTaskHndl);
@@ -160,82 +154,19 @@ void GPIO_Config(void)
 	 GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
 	 GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	 GPIO_Init(LED1_GPIO_PORT, &GPIO_InitStructure);
-#ifdef KUKU
-	 // Enable the EEPROM write-protect pin:
-	 GPIO_InitStructure.GPIO_Pin = WP_PIN;
-     GPIO_Init(WP_GPIO_PORT, &GPIO_InitStructure);	
+
 		
 	 /* Configure the SPI1 CLK pin */
 	 GPIO_InitStructure.GPIO_Pin = SPI1_SCK_PIN;
 	 GPIO_Init(SPI1_SCK_GPIO_PORT, &GPIO_InitStructure);
-	 
-	/* Configure PF15- ONE_SHOT1,  PF14- ONE_SHOT2, PF11-PIN_ON, PF12-CONN_CHK  pins */
-	 GPIO_InitStructure.GPIO_Pin = ONE_SHOT1_TRIGN_PIN | ONE_SHOT2_TRIGN_PIN | PIN_ON_PIN | CONN_CHK_PIN;
-	 GPIO_Init(ONE_SHOT1_TRIGN_GPIO_PORT, &GPIO_InitStructure);
-	 GPIO_SetBits(ONE_SHOT1_TRIGN_GPIO_PORT, ONE_SHOT1_TRIGN_PIN | ONE_SHOT2_TRIGN_PIN | CONN_CHK_PIN);
-	 GPIO_ResetBits(PIN_ON_GPIO_PORT, PIN_ON_PIN); //Disable Travel Pin Bridge
-
-	 /* Configure PG10 -Break_M1n and  PG11-Break_M2n as output push-pull	 */ 
-	 //GPIO_InitStructure.GPIO_Pin =	BREAK_M1N_PIN|BREAK_M2N_PIN;
-	 //GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_DOWN;
-	 //GPIO_Init(BREAK_M1N_GPIO_PORT, &GPIO_InitStructure);
-     //GPIO_ResetBits(BREAK_M1N_GPIO_PORT, BREAK_M1N_PIN | BREAK_M2N_PIN);
-	 
-	/* Configure PE5 -Break_PWM_M1 and  PE6-Break_PWM_M2 as AF push-pull	 */ 
-	 GPIO_InitStructure.GPIO_Pin =	BREAK_PWM_M1_PIN|BREAK_PWM_M2_PIN;
-	 GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-  	 GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-  	 GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  	 GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
-  	 GPIO_Init(BREAK_PWM_M1_GPIO_PORT, &GPIO_InitStructure);
-	 GPIO_PinAFConfig(BREAK_PWM_M1_GPIO_PORT, BREAK_PWM_M1_PIN_SOURCE, GPIO_AF_TIM9);
-  	 GPIO_PinAFConfig(BREAK_PWM_M1_GPIO_PORT, BREAK_PWM_M2_PIN_SOURCE, GPIO_AF_TIM9);
-
-
-	 /* Configure PD14 -Travel_PWM_L and  PD15-B-Travel_PWM_R as AF push-pull	  */ 
-	 GPIO_InitStructure.GPIO_Pin =	TRAVEL_PWM_L_PIN|TRAVEL_PWM_R_PIN;
-	 GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-  	 GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-  	 GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  	 GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
-  	 GPIO_Init(TRAVEL_PWM_L_GPIO_PORT, &GPIO_InitStructure);
-	 GPIO_ResetBits(TRAVEL_PWM_L_GPIO_PORT, TRAVEL_PWM_L_PIN|TRAVEL_PWM_R_PIN); //Disable Travel Pin PWM Signals
-	 GPIO_PinAFConfig(TRAVEL_PWM_L_GPIO_PORT, TRAVEL_PWM_L_PIN_SOURCE, GPIO_AF_TIM4);
-  	 GPIO_PinAFConfig(TRAVEL_PWM_L_GPIO_PORT, TRAVEL_PWM_R_PIN_SOURCE, GPIO_AF_TIM4);
-
-	 /* Configure PD.07 as output push-pull  RS422 _Tx_En*/ 
-	GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_7;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_DOWN;
-	GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-	GPIO_SetBits(GPIOD,GPIO_Pin_7);
-	 
-	 /* Initialize GPIO digital inputs */
-	 GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN; 
-	 GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-	 GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-	 GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
- 
-	 GPIO_InitStructure.GPIO_Pin  = DISCRETE_1_PIN | DISCRETE_2_PIN | DISCRETE_3_PIN | DISCRETE_4_PIN;
-	 GPIO_Init(DISCRETE_1_GPIO_PORT, &GPIO_InitStructure);
-
-	 GPIO_InitStructure.GPIO_Pin  = DISCRETE_5_PIN | DISCRETE_6_PIN | DISCRETE_7_PIN | DISCRETE_8_PIN;
-	 GPIO_Init(DISCRETE_5_GPIO_PORT, &GPIO_InitStructure);
-
-	 /* Configure PG10 -Break_M1n and  PG11-Break_M2n as inputs	 */ 
-	 //GPIO_InitStructure.GPIO_Pin =	BREAK_M1N_PIN|BREAK_M2N_PIN;
-	 //GPIO_Init(BREAK_M1N_GPIO_PORT, &GPIO_InitStructure);
 
 	 /* Configure PA6 -SPI1 MISO pin	 */ 
 	 GPIO_InitStructure.GPIO_Pin = SPI1_MISO_PIN;
 	 GPIO_Init(SPI1_MISO_GPIO_PORT, &GPIO_InitStructure);
 
-	 /* Configure PG10 -Break_M1n and  PG11-Break_M2n as input	 */ 
-	 GPIO_InitStructure.GPIO_Pin =	BREAK_M1N_PIN|BREAK_M2N_PIN;
-	 GPIO_Init(BREAK_M1N_GPIO_PORT, &GPIO_InitStructure);
-#endif     
+	/* Configure PA7 -SPI1 MOSI pin	 */ 
+	 GPIO_InitStructure.GPIO_Pin = SPI1_MOSI_PIN;
+	 GPIO_Init(SPI1_MOSI_GPIO_PORT, &GPIO_InitStructure);
 	 
 }
 
