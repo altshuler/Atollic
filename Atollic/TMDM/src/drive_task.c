@@ -821,6 +821,9 @@ void DriveInterpTask(void *para)
 					}
 				}
 			}
+
+
+
 			else if(drive_in_msg.hdr.bit.type==MSG_TYPE_EVENT)
 			{
 				if (drive_in_msg.hdr.bit.source==MSG_SRC_ISR_SPI) //Message is coming from SPI ISR
@@ -894,7 +897,9 @@ void DriveInterpTask(void *para)
 									DriveStatus.State1=DataIn.bit.AzMotor;
 							}
 
-
+/***************************************************************************************************************
+ *                      InterCommunicaton with Second DSP starts here                                         *
+ ***************************************************************************************************************/
 
 							if(DriveStatus.State2==0x1)
 							{
