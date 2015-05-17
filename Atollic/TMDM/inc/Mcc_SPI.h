@@ -11,5 +11,8 @@
 
 
 void Init_MCC_SPI();
+void Init_DSP_SPI(void);
+
+extern int16_t Iref;
 
 #endif /* MCCSPI_ */
