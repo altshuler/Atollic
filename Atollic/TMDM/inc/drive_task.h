@@ -71,6 +71,7 @@ extern const char *ctlTxServerQueueName[N_CTL];
 #define DRV_STATE_SET_TORQUE	0x08
 #define DRV_STATE_SET_VEL		0x09
 #define DRV_STATE_SET_CURR		0x0A
+#define DRV_STATE_GET_CURR		0x0B
 
 #define CURRENT_OFFSET		2.0
 #define MOTION_ACTIVE		1
@@ -168,19 +169,19 @@ typedef struct
 	uint16_t AzMtrType	:1;
 	uint16_t ElMtrType	:1;
 #else
-	uint16_t ElMtrType	:1;	
-	uint16_t AzMtrType	:1;
-	uint16_t ElEnc		:1;
-	uint16_t AzEnc		:1;
+	//uint16_t ElMtrType	:1;	
+	//uint16_t AzMtrType	:1;
+	//uint16_t ElEnc		:1;
+	//uint16_t AzEnc		:1;
 	uint16_t ElMotor	:1;
 	uint16_t AzMotor	:1;
-	uint16_t IOBIT		:1;
-	uint16_t POBIT		:1;
+	//uint16_t IOBIT		:1;
+	//uint16_t POBIT		:1;
 	uint16_t FansPwr	:2;
 	uint16_t FanB		:1;
 	uint16_t FanA		:1;
 	uint16_t FansPwm	:2;
-	uint16_t Spare		:2;
+	uint16_t Spare		:8;
 #endif
 
 }sMCC_DATA_IN;
