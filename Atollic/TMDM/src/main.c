@@ -62,7 +62,7 @@ void ToggleLed4(void * pvParameters)
    for( ;; )
    {
      /* toggle LED4 each 250ms */
-	 GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
+	 //GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
      vTaskDelay(250);
    }
 }

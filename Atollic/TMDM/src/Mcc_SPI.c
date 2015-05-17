@@ -67,10 +67,11 @@ void Init_MCC_SPI()
 
 	installInterruptHandler(SPI1_IRQn,__sPI1_IRQHandler,NULL);
 	
+	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);  
 	NVIC_Configuration(SPI1_IRQn, configLIBRARY_LOWEST_INTERRUPT_PRIORITY/*0*/, 0);
 	SPI_I2S_ITConfig(SPI1, SPI_I2S_IT_RXNE, ENABLE);
 	SPI_Cmd(SPI1, ENABLE);
-	SPI_I2S_SendData(SPI1,0xFAFA);
+	//SPI_I2S_SendData(SPI1,0xAC53);
 }
 
 

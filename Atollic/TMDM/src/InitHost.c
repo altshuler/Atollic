@@ -55,7 +55,7 @@ xQueueHandle intHostTXQueue = NULL;
 //struct sHostInterface intHost;
 
 #define FROM_HOST_RX_BUFFERS				5	/**< Number of buffers */
-#define BUF1_RX_SIZE						(20+sizeof(PACKETBUF_HDR))	/**< Size of buffer data area */	
+#define BUF1_RX_SIZE						(30+sizeof(PACKETBUF_HDR))	/**< Size of buffer data area */	
 
 uint8_t MemAreaRXPool1[BUF1_RX_SIZE*FROM_HOST_RX_BUFFERS];
 MEMBUF_POOL hostRxPool;
