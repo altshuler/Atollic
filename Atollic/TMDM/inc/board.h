@@ -161,6 +161,7 @@ extern "C" {
 #define USART3_RX_GPIO_CLK				RCC_AHB1Periph_GPIOB
 #define USART3_RX_PIN_SOURCE			GPIO_PinSource11
 
+
 #define M1_SSI_SELN_PIN					GPIO_Pin_12
 #define M1_SSI_SELN_GPIO_PORT			GPIOB
 #define M1_SSI_SELN_GPIO_CLK			RCC_AHB1Periph_GPIOB
@@ -171,15 +172,22 @@ extern "C" {
 #define SPI2_SCK_GPIO_CLK				RCC_AHB1Periph_GPIOB
 #define SPI2_SCK_PIN_SOURCE				GPIO_PinSource13
 
-#define SPI2_SOMI_PIN					GPIO_Pin_14				
-#define SPI2_SOMI_GPIO_PORT				GPIOB
-#define SPI2_SOMI_GPIO_CLK				RCC_AHB1Periph_GPIOB
-#define SPI2_SOMI_PIN_SOURCE			GPIO_PinSource14
+#define SPI2_MISO_PIN					GPIO_Pin_14
+#define SPI2_MISO_GPIO_PORT				GPIOB
+#define SPI2_MISO_GPIO_CLK				RCC_AHB1Periph_GPIOB
+#define SPI2_MISO_PIN_SOURCE			GPIO_PinSource14
 
+#define SPI2_MOSI_PIN					GPIO_Pin_15
+#define SPI2_MOSI_GPIO_PORT				GPIOB
+#define SPI2_MOSI_GPIO_CLK				RCC_AHB1Periph_GPIOB
+#define SPI2_MOSI_PIN_SOURCE			GPIO_PinSource15
+
+#if defined KUKU
 #define TP10_PIN						GPIO_Pin_15				
 #define TP10_GPIO_PORT					GPIOB
 #define TP10_GPIO_CLK					RCC_AHB1Periph_GPIOB
 #define TP10_PIN_SOURCE					GPIO_PinSource15
+#endif
 
 /*
 ** Port C
