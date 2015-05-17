@@ -145,6 +145,15 @@ struct sHostInterface
 #define PACKET_POWER_ON_CODE			0xA5A5
 #define PACKET_OPERAT_CODE				0xA3A3
 
+#define PACKET_CALIB_SET_CODE			0xFCFC
+
+#define PACKET_CONFIG_REQ_CODE			0xF6F6
+#define PACKET_CONFIG_SET_CODE			0xF2F2
+
+#define PACKET_IBIT_SET_CODE			0xF1A5
+#define PACKET_IBIT_RSP_CODE			0xF1F1
+
+
 
 // HOST binary
 // Reception of record identifier LOW
