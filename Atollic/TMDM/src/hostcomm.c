@@ -71,7 +71,7 @@ uint8_t 	MccTimeoutFlag=0;
 */
 PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_packetizer *p)
 {
-	volatile PACKETBUF_HDR *fromHostPacket=NULL;
+	/*volatile*/ PACKETBUF_HDR *fromHostPacket=NULL;
 	volatile uint16_t temp;
 	
 	if (p->buf==NULL)
@@ -83,9 +83,8 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			p->buf=getPacketBuffer(p->pool,FIRST_PACKET_SEGMENT|LAST_PACKET_SEGMENT, HOST_NETWORK, UNDEFINED_FORMAT, 0);
 			if (p->buf==NULL)
 				p->stat.no_buffers++;
-			else
-				
-			ResetHostPacketizer(p);
+			else	
+				ResetHostPacketizer(p);
 			
 			break;
 		}
@@ -108,11 +107,11 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{
-				MccTimeoutFlag=0;
-				DriveTimeout(TIM3,3000); // 200 us Temeout
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
+				temp = (((uint16_t)rxChar)<<8)|((uint16_t)(p->prevRxChar));
 				if(temp==PACKET_HEADER)//Packet header
 				{	
+					MccTimeoutFlag=0;
+					DriveTimeout(TIM3,300); // 200 us Temeout
 					//temp = ((uint16_t)rxChar<<8)|((uint16_t)p->prevRxChar);
 					p->chksum+=temp;				
 					p->FieldCnt=0;
@@ -135,26 +134,31 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
-				if(temp==PACKET_POWER_ON_CODE)//Power on Opcode
-				{	
-					p->chksum+=temp;				
-					p->FieldCnt=0;
-					p->prevRxState=p->rxState;
-					p->rxState=HOST_RX_DATA_1;						
-				}
-				else if(temp==PACKET_OPERAT_CODE)//Operational Opcod
-				{	
-					p->chksum+=temp;				
-					p->FieldCnt=0;
-					p->prevRxState=p->rxState;
-					p->rxState=HOST_RX_DATA_1;						
-				}
-				else
+				temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));
+
+				switch (temp)
 				{
-					TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-					ResetHostPacketizer(p);	
+					case PACKET_POWER_ON_CODE:	 	//Power on Opcode
+					case PACKET_OPERAT_CODE:		//Operational Opcode
+					case PACKET_CALIB_SET_CODE:		//Calibration Opcode
+					case PACKET_CONFIG_SET_CODE:	//Configuration Opcode
+					case PACKET_CONFIG_REQ_CODE:	//Configuration Request Opcode
+					case PACKET_IBIT_SET_CODE:      //IBIT  Request Opcode
+
+						p->chksum+=temp;				
+						p->FieldCnt=0;
+						p->prevRxState=p->rxState;
+						p->rxState=HOST_RX_DATA_1;		
+
+					break;
+
+					default:
+						TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
+						ResetHostPacketizer(p);	
+					break;
+						
 				}
+				
 			}
 
 
@@ -167,7 +171,7 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 				
 				if(p->FieldCnt==p->FieldLen)
 				{
-					temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
+					temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));
 					p->chksum+=temp;
 					p->FieldCnt=0;
 					p->prevRxState=p->rxState;
@@ -183,7 +187,7 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 				
 				if(p->FieldCnt==p->FieldLen)
 				{
-					temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
+					temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));
 					p->chksum+=temp;
 					p->FieldCnt=0;
 					p->prevRxState=p->rxState;
@@ -200,7 +204,7 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 				
 				if(p->FieldCnt==p->FieldLen)
 				{
-					temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
+					temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));
 					p->chksum+=temp;				
 					p->FieldCnt=0;
 					p->prevRxState=p->rxState;
@@ -217,7 +221,7 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
+				temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));
 				if(temp==0x0)// Byte No 4 always 0x0
 				{	
 					p->chksum+=temp;				
@@ -242,7 +246,7 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{			
-				p->ReceivedChksum= ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
+				p->ReceivedChksum= (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));
 				
 				if(p->ReceivedChksum == p->chksum)
 				{
@@ -266,18 +270,18 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{	
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
-				if(temp==0x0)// Byte Reserved-1  always 0x0
-				{	
+				temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));
+				//if(temp==0x0)// Byte Reserved-1  always 0x0
+				//{	
 					p->FieldCnt=0;
 					p->prevRxState=p->rxState;
 					p->rxState=HOST_RESERVED_2;
-				}
-				else
-				{
-					TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-					ResetHostPacketizer(p);	
-				}
+				//}
+				//else
+				//{
+				//	TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
+				//	ResetHostPacketizer(p);	
+				//}
 			}
 
 			break;
@@ -289,18 +293,18 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{	
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));				
-				if(temp==0x0)// Byte Reserved-2  always 0xFFFF
-				{				
+				temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));			
+				//if(temp==0x0)// Byte Reserved-2  always 0xFFFF
+				//{				
 					p->FieldCnt=0;
 					p->prevRxState=p->rxState;
 					p->rxState=HOST_RESERVED_3;	
-				}
-				else
-				{
-					TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-					ResetHostPacketizer(p);	
-				}
+				//}
+				//else
+				//{
+				//	TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
+				//	ResetHostPacketizer(p);	
+				//}
 			}
 			break;
 
@@ -311,18 +315,18 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{	
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));
-				if(temp==0x0)// Byte Reserved-3  always 0x0
-				{				
+				temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));
+				//if(temp==0x0)// Byte Reserved-3  always 0x0
+				//{				
 					p->FieldCnt=0;
 					p->prevRxState=p->rxState;
 					p->rxState=HOST_RESERVED_4;	
-				}
-				else
-				{
-					TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-					ResetHostPacketizer(p);	
-				}			
+				//}
+				//else
+				//{
+				//	TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
+				//	ResetHostPacketizer(p);	
+				//}			
 			}
 
 			break;
@@ -335,18 +339,18 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));			
-				if(temp==0x0)// Byte Reserved-4  always 0xFFFF
-				{				
+				temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));		
+				//if(temp==0x0)// Byte Reserved-4  always 0xFFFF
+				//{				
 					p->FieldCnt=0;
 					p->prevRxState=p->rxState;
 					p->rxState=HOST_RESERVED_5;	
-				}
-				else
-				{
-					TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-					ResetHostPacketizer(p);	
-				}			
+				//}
+				//else
+				//{
+				//	TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
+				//	ResetHostPacketizer(p);	
+				//}			
 			}
 
 			break;
@@ -359,18 +363,18 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt==p->FieldLen)
 			{
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));			
-				if(temp==0x0)// Byte Reserved-5  always 0x0
-				{				
+				temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));		
+				//if(temp==0x0)// Byte Reserved-5  always 0x0
+				//{				
 					p->FieldCnt=0;
 					p->prevRxState=p->rxState;
 					p->rxState=HOST_RESERVED_6;	
-				}
-				else
-				{
-					TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-					ResetHostPacketizer(p);	
-				}
+				//}
+				//else
+				//{
+				//	TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
+				//	ResetHostPacketizer(p);	
+				//}
 
 			}
 
@@ -384,18 +388,18 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 				
 				if(p->FieldCnt==p->FieldLen)
 				{
-					temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));				
-					if(temp==0x0)// Byte Reserved-6  always 0xFFFF
-					{				
+					temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));			
+					//if(temp==0x0)// Byte Reserved-6  always 0xFFFF
+					//{				
 						p->FieldCnt=0;
 						p->prevRxState=p->rxState;
 						p->rxState=HOST_RESERVED_7; 
-					}
-					else
-					{
-						TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-						ResetHostPacketizer(p); 
-					}
+					//}
+					//else
+					//{
+					//	TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
+					//	ResetHostPacketizer(p); 
+					//}
 
 				}
 			
@@ -410,18 +414,18 @@ PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_pa
 			
 			if(p->FieldCnt == p->FieldLen)
 			{
-				temp = ((uint16_t)rxChar)|((uint16_t)(p->prevRxChar<<8));			
-				if(temp==0x0)// Byte Reserved-7  always 0x0
-				{					
+				temp = (((uint16_t)rxChar<<8))|((uint16_t)(p->prevRxChar));		
+				//if(temp==0x0)// Byte Reserved-7  always 0x0
+				//{					
 					TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
 					fromHostPacket=p->buf;
 					ResetHostPacketizer(p);	
-				}
-				else
-				{
-					TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
-					ResetHostPacketizer(p); 
-				}
+				//}
+				//else
+				//{
+				//	TIM_ITConfig(TIM3, TIM_IT_CC2, DISABLE);
+				//	ResetHostPacketizer(p); 
+				//}
 			}
 			break;	
 

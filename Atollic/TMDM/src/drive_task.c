@@ -37,6 +37,7 @@
 #include "itoa.h"
 #include "AbsEncoderSSI.h"
 #include "handlers.h"
+#include "hostcomm.h"
 
 #define CTL_RX_BUFFER_SIZE	(12+sizeof(PACKETBUF_HDR))
 #define N_CTL_RX_BUFFERS	4
@@ -155,7 +156,7 @@ const struct sDmaResSet ctlUartDma[N_CTL]=
 	}
 };
 
-__IO uint16_t T3_CCR1_Val = 600;/*300,30000*/
+__IO uint16_t T3_CCR1_Val = 300;/*300,30000*/
 __IO uint16_t T4_CCR1_Val = 30000;/*30000*/
 __IO uint16_t CCR2_Val = 1500;
 __IO uint16_t CCR3_Val = 800;
@@ -208,7 +209,7 @@ struct sFwdStat
 struct sFwdStat drv_1,drv_2;
 
 uint16_t MccDataIn[14];
-uint16_t MccDataOut[14]={0xAC53,0xA5A5,0x3412,0x6745,0xAB89,0x0,0x46E1,0x0,0xFFFF,0x0,0xFFFF,0x0,0xFFFF,0x0};
+uint16_t MccDataOut[14]={0xAC53,0xA5A5,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0};
 
 static int ctlRxCallback(void *arg, int status, void *addr, size_t size);
 void handleCtlIncomingData(char *Buffer, size_t len, struct sFromCtl_packetizer *CtlRxPack, uint16_t fwd, uint16_t chan);
@@ -584,8 +585,8 @@ void DriveInterpTask(void *para)
 	uint32_t interpScanSkipAcc=0;
 	uint8_t color;
 	uint16_t chksum;
-	uMCC_IN Data;
-
+	uMCC_IN DataIn;
+	uMCC_IN DataOut;
 	
 	#ifdef TASK_STACK_CHECK
 	unsigned portBASE_TYPE uxHighWaterMark;
@@ -629,7 +630,7 @@ void DriveInterpTask(void *para)
 	key=__disableInterrupts();
 	/* TIM3 configuration */
 	TIM_Config();
-	TIM_ITConfig(TIM3, TIM_IT_CC1 /*| TIM_IT_CC2*/ , ENABLE); //Enable Driver 1 Status and timeout Timers
+	//TIM_ITConfig(TIM3, TIM_IT_CC1 /*| TIM_IT_CC2*/ , ENABLE); //Enable Driver 1 Status and timeout Timers
 	__restoreInterrupts(key);
 
 	memset(&drv_1,0,sizeof(drv_1));
@@ -702,25 +703,29 @@ void DriveInterpTask(void *para)
 						}
 						else if (drive_in_msg.hdr.bit.source==MSG_SRC_CTL1RX) //Message is coming from controller 1
 						{
+							GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
 							/*TODO: incoming packet need to be parsed*/
 							color= *PACKETBUF_OFFSET_DATA(pktBuf,4) & FRAME_COLOR;
 						
 							tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,2)); //Calculate Current Offset*/
+							DataOut=(uMCC_IN)MccDataOut[11];
 							
 							if(tmp==DRV_CMD_CURRENT)//A.M.
 							{
 								tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,5));
 								if(tmp&0x8000)
-									MccDataOut[9]|=(1<<2);//Motor On
+									DataOut.bit.AzMotor=1;   	//Motor On
 								else
-									MccDataOut[9]&=~(1<<2);//Motor Off
-								MccDataOut[3]=(tmp&0x7FFF)<<4;
+									DataOut.bit.AzMotor=0;		//Motor Off
+								MccDataOut[5]=(tmp&0x7FFF)<<4;
 							}
 							else if (tmp==DRV_CMD_ERROR)
 							{
-								MccDataOut[9]&=~(1<<2);//Motor Off
-								MccDataOut[3]=0;
+								DataOut.bit.AzMotor=0;			//Motor Off
+								MccDataOut[5]=0;
 							}
+
+							MccDataOut[11]=(uint16_t)DataOut.all; 
 
 							if(color==FWD_FRAME_COLOR)
 							{
@@ -760,26 +765,34 @@ void DriveInterpTask(void *para)
 						}
 						else if (drive_in_msg.hdr.bit.source==MSG_SRC_CTL2RX) //Message is coming from controller 2
 						{
+							GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
 							color= *PACKETBUF_OFFSET_DATA(pktBuf,4) & FRAME_COLOR;
 							tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,2)); 
-							if(tmp==284)
-								GPIO_ResetBits(LED1_GPIO_PORT, LED1_PIN);
+							DataOut=(uMCC_IN)MccDataOut[11];
+							
+							//if(tmp==284)
+							//	GPIO_ResetBits(LED1_GPIO_PORT, LED1_PIN);
 							
 							if(tmp==DRV_CMD_CURRENT)//A.M.
 							{
 								tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,5));
 								if(tmp&0x8000)
-									MccDataOut[9]|=(1<<3);//Motor On
+									DataOut.bit.ElMotor=1;//Motor On
 								else
-									MccDataOut[9]&=~(1<<3);//Motor Off
-								MccDataOut[1]=(tmp&0x7FFF)<<4;
+									DataOut.bit.ElMotor=0;//Motor Off
+								MccDataOut[3]=(tmp&0x7FFF)<<4;
 							}
 							else if (tmp==DRV_CMD_ERROR)
 							{
-								MccDataOut[9]&=~(1<<3);//Motor Off
-								MccDataOut[1]=0;
+								DataOut.bit.ElMotor=0;//Motor Off
+								MccDataOut[3]=0;
 							}
 
+							MccDataOut[11]=(uint16_t)DataOut.all; 
+
+							
+							MccDataOut[13]=calc_checksum(&MccDataOut[0],13);
+							GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
 							if(color==FWD_FRAME_COLOR)
 							{
 								drv_2.fwd_rx++;
@@ -815,99 +828,132 @@ void DriveInterpTask(void *para)
 					if (pktBuf)
 					{
 						memcpy(MccDataIn, PACKETBUF_DATA(pktBuf), sizeof(MccDataIn));
-						
-						Data = (uMCC_IN)MccDataIn[2];
-						
-						if(DriveStatus.State1==0x1)
+
+						if((MccDataIn[1]==PACKET_POWER_ON_CODE)||(MccDataIn[1]==PACKET_OPERAT_CODE))
 						{
-							if(Data.bit.AzMotor)
+							MccDataOut[1]=MccDataIn[1];
+							
+							DataIn = (uMCC_IN)MccDataIn[4];
+							
+							if(DriveStatus.State1==0x1)
 							{
-								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
-								DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[1])<<4))>>4;
-							}
-							else
-								PrepareFirstCommand(DRV_STATE_MOTOR_OFF,&DriverCmd1,SCAN_FRAME_COLOR);
+								if(DataIn.bit.AzMotor)
+								{
+									GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
+									PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+									DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[3])<<4))>>4;
+									
+									if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+										drv_1.scan_tx++;
+								}
+								else
+								{
+									PrepareFirstCommand(DRV_STATE_MOTOR_OFF,&DriverCmd1,SCAN_FRAME_COLOR);
+									
+									if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+										drv_1.scan_tx++;
 
-							if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
-								drv_1.scan_tx++;
+									vTaskDelay(1);
+									
+									PrepareFirstCommand(DRV_STATE_GET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+									//DriverCmd1.DrvData.data1= 0;
 
-							DriveStatus.State1=Data.bit.AzMotor;
-						}
-						else
-						{
-							if(Data.bit.AzMotor)
-							{
-								PrepareFirstCommand(DRV_STATE_MOTOR_ON,&DriverCmd1,SCAN_FRAME_COLOR);
-
-								if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
-									drv_1.scan_tx++;
-
-								vTaskDelay(1);
-								
-								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
-								DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[1])<<4))>>4;
-
-								if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
-									drv_1.scan_tx++;
-							}
-							else
-							{
-								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
-								DriverCmd1.DrvData.data1= 0;
-								
-								if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
-									drv_1.scan_tx++;
-
-							}
-								DriveStatus.State1=Data.bit.AzMotor;
-						}
+									if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+										drv_1.scan_tx++;
+								}
 
 
-
-						if(DriveStatus.State2==0x1)
-						{
-							if(Data.bit.ElMotor)
-							{
-								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
-								DriverCmd2.DrvData.data1= ((int16_t)((MccDataIn[0])<<4))>>4;
-							}
-							else
-								PrepareFirstCommand(DRV_STATE_MOTOR_OFF,&DriverCmd2,SCAN_FRAME_COLOR);
-
-
-							if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
-								drv_2.scan_tx++;
-
-							DriveStatus.State2=Data.bit.ElMotor;
-						}
-						else
-						{
-							if(Data.bit.ElMotor)
-							{
-								PrepareFirstCommand(DRV_STATE_MOTOR_ON,&DriverCmd2,SCAN_FRAME_COLOR);
-
-								if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
-									drv_2.scan_tx++;
-
-								vTaskDelay(1); 
-								
-								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
-								DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[0])<<4))>>4;
-
-								if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
-									drv_2.scan_tx++;
+								DriveStatus.State1=DataIn.bit.AzMotor;
 							}
 							else
 							{
-								PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
-								DriverCmd2.DrvData.data1= 0;
-								
-								if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
-									drv_2.scan_tx++;
+								if(DataIn.bit.AzMotor)
+								{
+									PrepareFirstCommand(DRV_STATE_MOTOR_ON,&DriverCmd1,SCAN_FRAME_COLOR);
 
-							}							
-								DriveStatus.State2=Data.bit.ElMotor;
-						}						
+									if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+										drv_1.scan_tx++;
+
+									vTaskDelay(1);
+									
+									PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+									DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[3])<<4))>>4;
+
+									if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+										drv_1.scan_tx++;
+								}
+								else
+								{
+									PrepareFirstCommand(DRV_STATE_GET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+									//DriverCmd1.DrvData.data1= 0;
+									
+									if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+										drv_1.scan_tx++;
+
+								}
+									DriveStatus.State1=DataIn.bit.AzMotor;
+							}
+
+
+
+							if(DriveStatus.State2==0x1)
+							{
+								if(DataIn.bit.ElMotor)
+								{
+									GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
+									PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
+									DriverCmd2.DrvData.data1= ((int16_t)((MccDataIn[2])<<4))>>4;
+
+									if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+										drv_2.scan_tx++;
+								}
+								else
+								{
+									PrepareFirstCommand(DRV_STATE_MOTOR_OFF,&DriverCmd2,SCAN_FRAME_COLOR);
+
+									if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+										drv_2.scan_tx++;
+
+									vTaskDelay(1); 
+									
+									PrepareFirstCommand(DRV_STATE_GET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
+									//DriverCmd2.DrvData.data1= 0;
+
+									if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+										drv_2.scan_tx++;
+								}
+
+
+								DriveStatus.State2=DataIn.bit.ElMotor;
+							}
+							else
+							{
+								if(DataIn.bit.ElMotor)
+								{
+									PrepareFirstCommand(DRV_STATE_MOTOR_ON,&DriverCmd2,SCAN_FRAME_COLOR);
+
+									if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+										drv_2.scan_tx++;
+
+									vTaskDelay(1); 
+									
+									PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
+									DriverCmd2.DrvData.data1= ((int16_t)((MccDataIn[2])<<4))>>4;
+
+									if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+										drv_2.scan_tx++;
+								}
+								else
+								{
+									PrepareFirstCommand(DRV_STATE_GET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
+									//DriverCmd2.DrvData.data1= 0;
+									
+									if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
+										drv_2.scan_tx++;
+
+								}							
+									DriveStatus.State2=DataIn.bit.ElMotor;
+							}						
 						
 					  /*if (interpScanSkipCount==0)
 						{
@@ -922,6 +968,7 @@ void DriveInterpTask(void *para)
 							drv_1.scan_skip++;
 						}
 					*/
+						}
 						retMemBuf(pktBuf);
 					}
 				}
@@ -1253,7 +1300,7 @@ void TIM_Config(void)
   TIM_OC3PreloadConfig(TIM3, TIM_OCPreload_Disable);
  
   /* TIM Interrupts enable */
-  TIM_ITConfig(TIM3, /*TIM_IT_CC1 | TIM_IT_CC2 |*/ TIM_IT_CC3 | TIM_IT_CC4, ENABLE);
+  //TIM_ITConfig(TIM3, /*TIM_IT_CC1 | TIM_IT_CC2 |*/ TIM_IT_CC3 | TIM_IT_CC4, ENABLE);
 
   /* TIM3 enable counter */
   TIM_Cmd(TIM3, ENABLE);
@@ -1360,6 +1407,13 @@ void PrepareFirstCommand(uint16_t data, struct sDriverCmd *DrvCmd, uint8_t frame
 			DrvCmd->cmd=DRV_CMD_CURRENT;
 			DrvCmd->subcmd=0;
 			DrvCmd->parameters=COMM_TYPE_SET|DATA_TYPE_INT|(frameColor & FRAME_COLOR);
+			DrvCmd->DrvData.data1=0;
+		}
+		else if(data==DRV_STATE_GET_CURR)
+		{
+			DrvCmd->cmd=DRV_CMD_CURRENT;
+			DrvCmd->subcmd=0;
+			DrvCmd->parameters=COMM_TYPE_GET|DATA_TYPE_INT|(frameColor & FRAME_COLOR);
 			DrvCmd->DrvData.data1=0;
 		}
 }

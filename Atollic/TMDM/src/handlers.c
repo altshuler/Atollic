@@ -49,6 +49,7 @@ uint16_t datacnt=0;
 extern uint16_t MccDataOut[14];
 uint16_t LocalDataOut[14];
 
+
 int __eXTI15_10_IRQHandler(void * arg)
 {
 
@@ -85,17 +86,33 @@ int __sPI1_IRQHandler (void * arg)
 
 	if (SPI_I2S_GetITStatus(SPI1, SPI_I2S_IT_RXNE) == SET)
 	{
+			
 			SPI_ClearITPendingBit(SPI1,SPI_I2S_IT_RXNE);
+
+
+				//if (datacnt==0)
+				//		memcpy(LocalDataOut, MccDataOut, sizeof(MccDataOut)); 
+			
+				
+				datacnt++;
+				if(datacnt==14)
+					datacnt=0;
+				/*else if(datacnt==13)
+				{
+					MccDataOut[13]=calc_checksum(&MccDataOut[0],13);
+					SPI1->DR=MccDataOut[datacnt]; //SPI_I2S_SendData(SPI1,LocalDataOut[datacnt]);
+				}*/
+				else
+					SPI1->DR=MccDataOut[datacnt]; //SPI_I2S_SendData(SPI1,LocalDataOut[datacnt]);
+					
 			
 			data=(uint16_t)SPI_I2S_ReceiveData(SPI1);
-			localRxBuffer[0]=(uint8_t)(data>>8);
-			localRxBuffer[1]=(uint8_t)(data&0xFF);
+
+			localRxBuffer[0]=(uint8_t)(data&0xFF);
+			localRxBuffer[1]=(uint8_t)(data>>8);
 			rxLen=2;
 
-			datacnt++;
-			if(datacnt==14)
-				datacnt=0;
-			SPI_I2S_SendData(SPI1,LocalDataOut[datacnt]);
+	
 			
 			
 			for (idx=0;idx<rxLen;idx++)
@@ -104,29 +121,14 @@ int __sPI1_IRQHandler (void * arg)
 				
 				if(pktBuf)
 				{
-					memcpy(LocalDataOut, MccDataOut, sizeof(MccDataOut)); 
-					
-					for(x=0;x<4;x++)
-					{
-						data=LocalDataOut[x];
-						LocalDataOut[x]=((data&0xFF)<<8)|((data>>8)&0xFF);
-					}
-					data=calc_checksum(&LocalDataOut[0],4);
-					LocalDataOut[4]=((data&0xFF)<<8)|((data>>8)&0xFF);
-
-					for(x=5;x<11;x++)
-					{
-						data=LocalDataOut[x];
-						LocalDataOut[x]=((data&0xFF)<<8)|((data>>8)&0xFF);
-					}
-					data=calc_checksum(&LocalDataOut[5],6);
-					LocalDataOut[11]=((data&0xFF)<<8)|((data>>8)&0xFF);
-					SPI_I2S_SendData(SPI1,LocalDataOut[0]);
+					SPI1->DR=0xAC53;
 					datacnt=0;
 					msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_SPI, MSG_TYPE_EVENT);
 					//msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_HOSTRX, MSG_TYPE_PACKET);
 					msg.data=0;
 					msg.buf=pktBuf;
+
+					
 					xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
 					
 					if( xHigherPriorityTaskWoken )
@@ -160,6 +162,8 @@ int __tIM3_IRQHandler(void * arg)
   if (TIM_GetITStatus(TIM3, TIM_IT_CC1) != RESET)
   {
 	TIM_ClearITPendingBit(TIM3, TIM_IT_CC1);
+
+			
 /*	if(DriveStatus.Drive1PacketSent==0)
 	{	
 		msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_TIM, MSG_TYPE_EVENT);
