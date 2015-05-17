@@ -2,6 +2,7 @@
 <launchConfiguration type="com.atollic.hardwaredebug.launch.launchConfigurationType">
 <stringAttribute key="com.atollic.hardwaredebug.launch.analyzeCommands" value="# Set flash parallelism mode to 32, 16, or 8 bit when using STM32 F2/F4 microcontrollers&#13;&#10;# Uncomment next line, 2=32 bit, 1=16 bit and 0=8 bit parallelism mode&#13;&#10;monitor flash set_parallelism_mode 2&#13;&#10;&#13;&#10;# Set character encoding&#13;&#10;set host-charset CP1252&#13;&#10;set target-charset CP1252&#13;&#10;&#13;&#10;# Reset to known state&#13;&#10;monitor reset&#13;&#10;&#13;&#10;# Load the program executable&#13;&#10;load&#9;&#9;&#13;&#10;&#13;&#10;# Enable Debug connection in low power modes (DBGMCU-&gt;CR)&#13;&#10;set *0xE0042004 = (*0xE0042004) | 0x7&#13;&#10;&#13;&#10;# Start the executable&#13;&#10;continue"/>
 <intAttribute key="com.atollic.hardwaredebug.launch.formatVersion" value="2"/>
+<stringAttribute key="com.atollic.hardwaredebug.launch.hwinitCommands" value="# Initialize your hardware here&#13;&#10;"/>
 <stringAttribute key="com.atollic.hardwaredebug.launch.initCommands" value=""/>
 <stringAttribute key="com.atollic.hardwaredebug.launch.ipAddress" value="localhost"/>
 <stringAttribute key="com.atollic.hardwaredebug.launch.jtagDevice" value="ST-LINK"/>
@@ -38,5 +39,5 @@
 </listAttribute>
 <stringAttribute key="org.eclipse.dsf.launch.MEMORY_BLOCKS" value="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot; standalone=&quot;no&quot;?&gt;&#13;&#10;&lt;memoryBlockExpressionList context=&quot;reserved-for-future-use&quot;/&gt;&#13;&#10;"/>
 <stringAttribute key="process_factory_id" value="org.eclipse.cdt.dsf.gdb.GdbProcessFactory"/>
-<stringAttribute key="saved_expressions&lt;seperator&gt;Unknown" value="0x200059b0,0x20003a00,0x20003a18,0x2000005c,0x20005e64,0x20005e08,0x20006024,0x2000388c"/>
+<stringAttribute key="saved_expressions&lt;seperator&gt;Unknown" value="0x200059b0,0x20003a00,0x20003a18,0x2000005c,0x20005e64,0x20005e08,0x20006024"/>
 </launchConfiguration>
