@@ -21,6 +21,8 @@ int __sPI1_IRQHandler (void * arg);
 int __tIM4_IRQHandler(void * arg);
 int __tIM3_IRQHandler(void * arg);
 
+int __sPI2_IRQHandler(void * arg);
+
 
 
 
