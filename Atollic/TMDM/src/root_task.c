@@ -93,27 +93,27 @@ void root_task(void *para)
 	//initMemBufPool(&cmdResBuffers,cmdResBuffersMemory,sizeof(cmdResBuffersMemory),CMD_RES_BUFFER_SIZE+sizeof(PACKETBUF_HDR),CMD_RES_BUFFERS);
 	
 	   /* Toggle LED4  every 250ms */
-	  xTaskCreate(ToggleLed4,( signed char * ) "LED4", configMINIMAL_STACK_SIZE, NULL, LED_TASK_PRIO, NULL);
+	   xTaskCreate(ToggleLed4,( signed char * ) "LED4", configMINIMAL_STACK_SIZE, NULL, LED_TASK_PRIO, NULL);
 
 	 /* Start Host command interpriter task  */
-	 xTaskCreate( hCmdTask, ( signed char * ) "HCmd_task", configMINIMAL_STACK_SIZE*2 , NULL, HCMD_TASK_PRIO, NULL );	
+	   xTaskCreate( hCmdTask, ( signed char * ) "HCmd_task", configMINIMAL_STACK_SIZE*2 , NULL, HCMD_TASK_PRIO, NULL );
 
 	  /* Start DriveInterpTask: Sending commands and Receiving responce from Drivers   */
-	   xTaskCreate( DriveInterpTask, ( signed char * ) "DriveInterpTask", configMINIMAL_STACK_SIZE*2 , NULL, DRIVE_INT_TASK_PRIO, NULL );
+	   xTaskCreate( DriveInterpTask, ( signed char * ) "DriveInterpTask", configMINIMAL_STACK_SIZE*4/*2*/ , NULL, DRIVE_INT_TASK_PRIO, NULL );
 	
 	   /* Start CBIT Task: CBIT Process   */
 	   //xTaskCreate( CBITTask, ( signed char * ) "CBITTask", configMINIMAL_STACK_SIZE , NULL, CBIT_TASK_PRIO, NULL );
 	
 	  /* Start Motion Calc Task: Calculates Next Motion Step  */
 	   //xTaskCreate( motion_task, ( signed char * ) "MotionTask", configMINIMAL_STACK_SIZE , NULL, MOTION_TASK_PRIO, NULL );
+       vTaskPrioritySet(root_task,0);
 
-
-	for (i=0;i<N_CTL;i++)
+/*	for (i=0;i<N_CTL;i++)
 	{
 		xTaskCreate(ctlRxServerTask, (signed portCHAR *)ctlRxServerTaskName[i], configMINIMAL_STACK_SIZE*3, &ctlServerConfig[i], DRIVE_RX_TASK_PRIO, &ctlRxServerTaskHndl[i]);
 		xTaskCreate(ctlTxServerTask, (signed portCHAR *)ctlTxServerTaskName[i], configMINIMAL_STACK_SIZE*2, &ctlServerConfig[i], DRIVE_TX_TASK_PRIO, &ctlTxServerTaskHndl[i]);
 	}
-
+*/
 
 	//xTaskCreate(ctlRxServerTask, (signed portCHAR *)ctlRxServerTaskName[0], configMINIMAL_STACK_SIZE*3, &ctlServerConfig[0], DRIVE_RX_TASK_PRIO, &ctlRxServerTaskHndl[0]);
 	//xTaskCreate(ctlTxServerTask, (signed portCHAR *)ctlTxServerTaskName[0], configMINIMAL_STACK_SIZE*2, &ctlServerConfig[0], DRIVE_TX_TASK_PRIO, &ctlTxServerTaskHndl[0]);

@@ -38,6 +38,8 @@
 #include "AbsEncoderSSI.h"
 #include "handlers.h"
 #include "hostcomm.h"
+#include "MCC_SPI.h"
+
 
 #define CTL_RX_BUFFER_SIZE	(12+sizeof(PACKETBUF_HDR))
 #define N_CTL_RX_BUFFERS	4
@@ -210,6 +212,7 @@ struct sFwdStat drv_1,drv_2;
 
 uint16_t MccDataIn[14];
 uint16_t MccDataOut[14]={0xAC53,0xA5A5,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0,0x0};
+uint16_t AZ_Motor_Enable=0;
 
 static int ctlRxCallback(void *arg, int status, void *addr, size_t size);
 void handleCtlIncomingData(char *Buffer, size_t len, struct sFromCtl_packetizer *CtlRxPack, uint16_t fwd, uint16_t chan);
@@ -498,7 +501,6 @@ void ctlTxServerTask(void *para)
 									// For debugging only
 									//localPbuf=(volatile Uint8 *)PACKET_DATA(p);
 									//localBufLen=p->Length;
-									//
 									status = GIO_write(hCtlUart_OUT[ctlCommParam->ctlId], PACKETBUF_DATA(p), &p->dlen);
 									if (status==IODEV_COMPLETED)
 									{
@@ -570,7 +572,134 @@ void handleCtlIncomingData(char *Buffer, size_t len, struct sFromCtl_packetizer 
 /**************************************************************************/
 
 
+/*  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%                void DriveInterpTask(void *para) - section starts here [Elevation Motor]                                               %
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%	*/
 
+void DriveInterpTask(void *para)
+{
+	MSG_HDR drive_in_msg;
+	PACKETBUF_HDR *pktBuf=NULL;
+	uint32_t key;
+	uint16_t CheckSum=0;
+	uMCC_IN DataIn;
+
+
+	#ifdef TASK_STACK_CHECK
+	unsigned portBASE_TYPE uxHighWaterMark;
+
+	/* Inspect our own high water mark on entering the task. */
+	uxHighWaterMark = uxTaskGetStackHighWaterMark( NULL );
+	#endif
+
+
+	key=__disableInterrupts();
+	/* TIM3 configuration */
+	TIM_Config();
+	__restoreInterrupts(key);
+
+
+	while(1)
+	{
+		if (xQueueReceive( DriveIntQueue, &drive_in_msg,( portTickType ) portMAX_DELAY ))
+		{
+			pktBuf=(PACKETBUF_HDR *)drive_in_msg.buf;
+			if(drive_in_msg.hdr.bit.type==MSG_TYPE_EVENT)
+			{
+				if (drive_in_msg.hdr.bit.source==MSG_SRC_ISR_SPI) //Message is coming from SPI ISR
+				{
+					if (pktBuf)
+					{
+						memcpy(MccDataIn, PACKETBUF_DATA(pktBuf), sizeof(MccDataIn));
+						if((MccDataIn[1]==PACKET_POWER_ON_CODE)||(MccDataIn[1]==PACKET_OPERAT_CODE))
+						{
+							DataIn = (uMCC_IN)MccDataIn[4];
+						/*  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+							%               Azimuth motor activation            %
+							%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+							if(DataIn.bit.AzMotor)//Azimuth motor ON and Sends Current command
+							{
+								Iref=((int16_t)((MccDataIn[3])<<4))>>4; //Iref is a global variable that uses to store current command from MCC
+								EnableAzimuth=DataIn.bit.AzMotor;       //Enable Azimuth motor
+							}
+							else//Azimuth motor OFF
+							{
+								Iref=0x0;
+								EnableAzimuth=0;
+							}
+						/*  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+							%               Elevation motor activation          %
+							%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+							if(DataIn.bit.AzMotor)//Elevation motor ON and Sends Current command
+							{
+								IrefEl=((int16_t)((MccDataIn[2])<<4))>>4; //Iref is a global variable that uses to store current command from MCC
+								EnableElevation=DataIn.bit.AzMotor;       //Enable Elevation motor
+							}
+							else//Azimuth motor OFF
+							{
+								IrefEl=0x0;
+								EnableElevation=0;
+							}
+						}
+						}
+					}
+
+			/*  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+				%               Assemble MCC out packet             %
+				%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+				MccDataOut[0]=0xAC53;
+				MccDataOut[1]=0xA3A3;
+				MccDataOut[2]=SPI3_RxArrayAZ[1];  //Elevation encoder
+				MccDataOut[3]=SPI3_RxArrayAZ[0];  // Elevation current feedback + 3 LSB bits of Elevation Encoder
+
+
+				MccDataOut[4]=SPI2_RxArrayAZ[1];  //Azimuth encoder
+				MccDataOut[5]=SPI2_RxArrayAZ[0];  // Azimuth current feedback + 3 LSB bits of Azimuth Encoder
+
+				if(SPI3_RxArrayAZ[0]&(1<<3))      //Azimuth motor on/off bit
+						MccDataOut[11]|=(1<<0);
+					else
+						MccDataOut[11]&=~(1<<0);
+
+				if(SPI2_RxArrayAZ[0]&(1<<3))      //Azimuth motor on/off bit
+					MccDataOut[11]|=(1<<1);
+				else
+					MccDataOut[11]&=~(1<<1);
+
+				CheckSum+=*(MccDataOut);
+				CheckSum+=*(MccDataOut+1);
+				CheckSum+=*(MccDataOut+2);
+				CheckSum+=*(MccDataOut+3);
+				CheckSum+=*(MccDataOut+4);
+				CheckSum+=*(MccDataOut+5);
+				CheckSum+=*(MccDataOut+6);
+				CheckSum+=*(MccDataOut+7);
+				CheckSum+=*(MccDataOut+8);
+				CheckSum+=*(MccDataOut+9);
+				CheckSum+=*(MccDataOut+10);
+				CheckSum+=*(MccDataOut+11);
+				CheckSum+=*(MccDataOut+12);
+				*(MccDataOut+13)=CheckSum;
+
+
+				retMemBuf(pktBuf);//release buffer
+				}
+			}
+	}
+
+#ifdef TASK_STACK_CHECK
+/* Calling the function will have used some stack space, we would therefore now expect
+uxTaskGetStackHighWaterMark() to return a value lower than when it was called on
+entering the task. */
+uxHighWaterMark = uxTaskGetStackHighWaterMark( NULL );
+#endif
+
+}
+
+
+
+#ifdef KUKU
 void DriveInterpTask(void *para)
 {
 	MSG_HDR drive_in_msg;
@@ -597,36 +726,9 @@ void DriveInterpTask(void *para)
 
 	interpScanSkipCount=0;
 
-	#ifdef KUKU
-	/* Initialize  interface queue*/
-	DriveIntQueue = xQueueCreate( DRIVE_INT_QUEUE_SIZE, sizeof(MSG_HDR));
-	if( DriveIntQueue == NULL )
-	{
-		// Failed to create the queue.
-		while(1)
-		{
-			vTaskSuspend(NULL);
-			vTaskDelay(10);
-		}
-	}
-	#endif
 
-	#ifdef KUKU
-	/* synchronize with CTL transmission/reception servers */
-	while (1)
-	{
-		for (tmp=0;tmp<N_CTL;tmp++)
-		{
-			if ((hCtlUart_OUT[tmp]==NULL) || (hCtlUart_IN[tmp]==NULL))
-				break;
-		}
-		if (tmp<N_CTL)
-			vTaskDelay(2);
-		else
-			break;
-	}
-	#endif
-	
+
+
 	key=__disableInterrupts();
 	/* TIM3 configuration */
 	TIM_Config();
@@ -635,12 +737,15 @@ void DriveInterpTask(void *para)
 
 	memset(&drv_1,0,sizeof(drv_1));
 	memset(&drv_2,0,sizeof(drv_2));
+
 	while (1)
 	{	
 		if (xQueueReceive( DriveIntQueue, &drive_in_msg,( portTickType ) portMAX_DELAY ))
 		{	
 			pktBuf=(PACKETBUF_HDR *)drive_in_msg.buf;
+
 			
+#ifdef Anton
 			if (drive_in_msg.hdr.bit.type==MSG_TYPE_PACKET)
 			{
 				
@@ -703,13 +808,17 @@ void DriveInterpTask(void *para)
 						}
 						else if (drive_in_msg.hdr.bit.source==MSG_SRC_CTL1RX) //Message is coming from controller 1
 						{
-							GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
+							//GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
 							/*TODO: incoming packet need to be parsed*/
 							color= *PACKETBUF_OFFSET_DATA(pktBuf,4) & FRAME_COLOR;
 						
 							tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,2)); //Calculate Current Offset*/
 							DataOut=(uMCC_IN)MccDataOut[11];
 							
+
+
+
+
 							if(tmp==DRV_CMD_CURRENT)//A.M.
 							{
 								tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,5));
@@ -765,7 +874,7 @@ void DriveInterpTask(void *para)
 						}
 						else if (drive_in_msg.hdr.bit.source==MSG_SRC_CTL2RX) //Message is coming from controller 2
 						{
-							GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
+							//GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
 							color= *PACKETBUF_OFFSET_DATA(pktBuf,4) & FRAME_COLOR;
 							tmp=*(uint16_t *)(PACKETBUF_OFFSET_DATA(pktBuf,2)); 
 							DataOut=(uMCC_IN)MccDataOut[11];
@@ -792,7 +901,7 @@ void DriveInterpTask(void *para)
 
 							
 							MccDataOut[13]=calc_checksum(&MccDataOut[0],13);
-							GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
+						//	GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
 							if(color==FWD_FRAME_COLOR)
 							{
 								drv_2.fwd_rx++;
@@ -822,10 +931,14 @@ void DriveInterpTask(void *para)
 				}
 			}
 
+#endif
 
-
-			else if(drive_in_msg.hdr.bit.type==MSG_TYPE_EVENT)
+			/*else*/ if(drive_in_msg.hdr.bit.type==MSG_TYPE_EVENT)
 			{
+
+				/*****************************************************************************
+				 *                 Resent To First DSP from MCC                               *
+				 ****************************************************************************/
 				if (drive_in_msg.hdr.bit.source==MSG_SRC_ISR_SPI) //Message is coming from SPI ISR
 				{
 					if (pktBuf)
@@ -838,6 +951,38 @@ void DriveInterpTask(void *para)
 							
 							DataIn = (uMCC_IN)MccDataIn[4];
 							
+
+
+							if(DriveStatus.State1==0x1)//Motor on condition
+							{
+								if(DataIn.bit.AzMotor)//Sends Current command to Azimuth motor
+								{
+									Iref=((int16_t)((MccDataIn[3])<<4))>>4; //Iref is a global variable that uses to store current command from MCC
+								}
+							}
+							else
+							{
+								if(DataIn.bit.AzMotor)
+								{
+									EnableAzimuth=DataIn.bit.AzMotor;
+				#ifdef KUKU
+									if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+										drv_1.scan_tx++;
+
+									//vTaskDelay(1);
+
+									PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd1,SCAN_FRAME_COLOR);
+									DriverCmd1.DrvData.data1= ((int16_t)((MccDataIn[3])<<4))>>4;
+
+									if(pdPASS==SendCmdToDrive(DRIVER_1_ID, &DriverCmd1))
+										drv_1.scan_tx++;
+					#endif
+								}
+
+									DriveStatus.State1=DataIn.bit.AzMotor;
+							}
+
+#ifdef UART_INTERCOM
 							if(DriveStatus.State1==0x1)
 							{
 								if(DataIn.bit.AzMotor)
@@ -896,16 +1041,16 @@ void DriveInterpTask(void *para)
 								}
 									DriveStatus.State1=DataIn.bit.AzMotor;
 							}
-
+#endif
 /***************************************************************************************************************
  *                      InterCommunicaton with Second DSP starts here                                         *
  ***************************************************************************************************************/
-
+#ifdef Anton
 							if(DriveStatus.State2==0x1)
 							{
 								if(DataIn.bit.ElMotor)
 								{
-									GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
+								//	GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
 									PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
 									DriverCmd2.DrvData.data1= ((int16_t)((MccDataIn[2])<<4))>>4;
 
@@ -919,7 +1064,7 @@ void DriveInterpTask(void *para)
 									if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
 										drv_2.scan_tx++;
 
-									vTaskDelay(1); 
+								//	vTaskDelay(1);
 									
 									PrepareFirstCommand(DRV_STATE_GET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
 									//DriverCmd2.DrvData.data1= 0;
@@ -940,7 +1085,7 @@ void DriveInterpTask(void *para)
 									if(pdPASS==SendCmdToDrive(DRIVER_2_ID, &DriverCmd2))
 										drv_2.scan_tx++;
 
-									vTaskDelay(1); 
+									//vTaskDelay(1);
 									
 									PrepareFirstCommand(DRV_STATE_SET_CURR,&DriverCmd2,SCAN_FRAME_COLOR);
 									DriverCmd2.DrvData.data1= ((int16_t)((MccDataIn[2])<<4))>>4;
@@ -959,7 +1104,7 @@ void DriveInterpTask(void *para)
 								}							
 									DriveStatus.State2=DataIn.bit.ElMotor;
 							}						
-						
+						#endif
 					  /*if (interpScanSkipCount==0)
 						{
 							PrepareFirstCommand(drive_in_msg.data, &DriverCmd1, SCAN_FRAME_COLOR);
@@ -973,11 +1118,14 @@ void DriveInterpTask(void *para)
 							drv_1.scan_skip++;
 						}
 					*/
+
 						}
+
 						retMemBuf(pktBuf);
 					}
 				}
 			}
+#ifdef Anton
 			else if(drive_in_msg.hdr.bit.type==MSG_TYPE_CMD)
 			{
 				if ((drive_in_msg.hdr.bit.source==MSG_SRC_HCMD_1)||
@@ -1007,19 +1155,20 @@ void DriveInterpTask(void *para)
 					}
 				}
 			}
-
+#endif
 			#ifdef TASK_STACK_CHECK
 			/* Calling the function will have used some stack space, we would therefore now expect
 			uxTaskGetStackHighWaterMark() to return a value lower than when it was called on
 			entering the task. */
 			uxHighWaterMark = uxTaskGetStackHighWaterMark( NULL );
 			#endif
-//#endif
+
 		}		
 	}
+
 }
 
-
+#endif
 
 int sendPacketToDriveInt(void *packet, uint16_t hdr, uint32_t timeout, uint16_t dst_chan)
 {

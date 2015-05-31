@@ -29,6 +29,8 @@
 #include "oshooks.h"
 #include "Mcc_SPI.h"
 #include "AbsEncoderSSI.h"
+#include "handlers.h"
+#include "drive_task.h"
 #include <string.h>
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,6 +43,8 @@
 
 int i=0;
 
+DMA_InitTypeDef  DMA_InitStructSPI1;
+NVIC_InitTypeDef NVIC_InitStructure;
 
 xTaskHandle rootTaskHndl = NULL;
 
@@ -62,7 +66,7 @@ void ToggleLed4(void * pvParameters)
    for( ;; )
    {
      /* toggle LED4 each 250ms */
-	 //GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
+	 GPIO_ToggleBits(LED1_GPIO_PORT, LED1_PIN);
      vTaskDelay(250);
    }
 }
@@ -86,7 +90,7 @@ int main(void)
      */
   RCC_GetClocksFreq(&clkStatus);
   
-  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA1|RCC_AHB1Periph_DMA2, ENABLE);
+  RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_DMA1|RCC_AHB1Periph_DMA2, ENABLE);//DMA2->SPI1 clock enable
 
   initIrqHandlerTable();
 
@@ -95,9 +99,129 @@ int main(void)
 
   /* Initialize devices */
   DEV_init();
-  initDmaManager();
 
-  Init_MCC_SPI();
+
+
+ // initDmaManager();
+
+
+  Init_DMA_SPI(SpiOne,14,(uint32_t *)MccDataOut,(uint32_t *)SPI1_RxArray); //if no DMA access, use Init_MCC_SPI();
+  Init_DMA_SPI(SpiTwo,2,(uint32_t *)SPI2_TxArrayAZ,(uint32_t *)SPI2_RxArrayAZ);
+  Init_DMA_SPI(SpiThree,2,(uint32_t *)SPI3_TxArrayAZ,(uint32_t *)SPI3_RxArrayAZ);
+//#define DMA_SPI1 1
+
+#if defined DMA_SPI1
+
+  /* Initialize DMA Streams */
+  DMA_DeInit(DMA2_Stream3); //SPI1_TX_DMA_STREAM
+  DMA_DeInit(DMA2_Stream2); //SPI1_RX_DMA_STREAM
+
+  while (DMA_GetCmdStatus(DMA1_Stream3) != DISABLE){}
+  while (DMA_GetCmdStatus(DMA1_Stream2) != DISABLE){}
+
+
+/*             For a given Stream, program the required configuration through following parameters:
+*              Source and Destination addresses,                              -o.k
+*              Transfer Direction,                                            -o.k
+*              Transfer size,                                                 -o.k
+*              Source and Destination data formats,                           -o.k
+*              Circular or Normal mode,                                       -o.k
+*              Stream Priority level,                                         -o.k
+*              Source and Destination                                         -o.k
+*              Incrementation mode,                                           -0.k
+*              FIFO mode                                                      -o.k
+*              its Threshold (if needed),                                     -o.k
+*              Burst mode for Source and/or  Destination (if needed)          -0.k
+*              using the DMA_Init() function.
+*              To avoid filling un-nesecessary fields, you can call DMA_StructInit()
+*              function to initialize a given structure with default values (reset values), the modify
+*              only necessary fields (ie. Source and Destination addresses, Transfer size and Data Formats).*/
+
+
+  DMA_InitStructSPI1.DMA_BufferSize = (uint16_t)14;//14;//(tx_len + 3);
+
+  /* FIFO */
+  DMA_InitStructSPI1.DMA_FIFOMode = DMA_FIFOMode_Disable ;
+  DMA_InitStructSPI1.DMA_FIFOThreshold = DMA_FIFOThreshold_1QuarterFull ;
+
+  /* BRUST */
+  DMA_InitStructSPI1.DMA_MemoryBurst = DMA_MemoryBurst_Single ;
+  DMA_InitStructSPI1.DMA_PeripheralBurst = DMA_PeripheralBurst_Single;
+
+  /* Incrementation */
+  DMA_InitStructSPI1.DMA_MemoryInc = DMA_MemoryInc_Enable;
+  DMA_InitStructSPI1.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+
+
+  DMA_InitStructSPI1.DMA_Mode = DMA_Mode_Circular;
+
+  /* Data size */
+  DMA_InitStructSPI1.DMA_PeripheralDataSize =DMA_PeripheralDataSize_HalfWord;
+  DMA_InitStructSPI1.DMA_MemoryDataSize =DMA_MemoryDataSize_HalfWord;
+
+  /* Base Address */
+  DMA_InitStructSPI1.DMA_PeripheralBaseAddr = (uint32_t)(&(SPI1->DR));
+
+  DMA_InitStructSPI1.DMA_Priority = DMA_Priority_High;
+
+  /* Configure Tx DMA */
+  DMA_InitStructSPI1.DMA_Channel = DMA_Channel_3;//Channel 3 is chooses from the application node table, is suitable with SPI1
+  DMA_InitStructSPI1.DMA_DIR = DMA_DIR_MemoryToPeripheral;
+  DMA_InitStructSPI1.DMA_Memory0BaseAddr = (uint32_t)&SPI1_TxArray[0];
+
+  DMA_Init(DMA2_Stream3, &DMA_InitStructSPI1);
+
+  /* Configure Rx DMA */
+  DMA_InitStructSPI1.DMA_Channel = DMA_Channel_3;
+  DMA_InitStructSPI1.DMA_DIR = DMA_DIR_PeripheralToMemory;
+  DMA_InitStructSPI1.DMA_Memory0BaseAddr = (uint32_t)SPI1_RxArray;//pTmpBuf1;
+
+  DMA_Init(DMA2_Stream2, &DMA_InitStructSPI1);
+
+  /*
+  Enable the NVIC and the corresponding interrupt(s) using the function
+  DMA_ITConfig() if you need to use DMA interrupts.*/
+
+  installInterruptHandler(DMA2_Stream2_IRQn,__DMA2_Stream2_IRQHandler,NULL);
+
+  DMA_ITConfig(DMA2_Stream2,DMA_IT_TC, ENABLE); // Transfer complete interrupt mask
+
+
+
+  NVIC_InitStructure.NVIC_IRQChannel = DMA2_Stream2_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 15;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 15;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init (&NVIC_InitStructure);
+
+  /*Enable the DMA stream using the DMA_Cmd() function.*/
+  DMA_Cmd(DMA2_Stream3, ENABLE); /* Enable the DMA SPI TX Stream */
+  DMA_Cmd(DMA2_Stream2, ENABLE); /* Enable the DMA SPI RX Stream */
+
+  /* Enable the SPI Rx/Tx DMA request */
+  SPI_I2S_DMACmd(SPI1, SPI_I2S_DMAReq_Rx, ENABLE);
+  SPI_I2S_DMACmd(SPI1, SPI_I2S_DMAReq_Tx, ENABLE);
+
+  SPI_Cmd(SPI1, ENABLE);
+
+  /*
+  while(1)
+   {
+  // Waiting the end of Data transfer
+  while (DMA_GetFlagStatus(DMA2_Stream3, DMA_FLAG_TCIF3)==RESET);
+  while (DMA_GetFlagStatus(DMA2_Stream2, DMA_FLAG_TCIF2)==RESET);
+
+  // clear flags
+  DMA_ClearFlag(DMA2_Stream3, DMA_FLAG_TCIF3);
+  DMA_ClearFlag(DMA2_Stream2, DMA_FLAG_TCIF2);
+  }
+  */
+#endif
+
+
+
+ // Init_DSP_SPI();
+
 
   
   /* Create OS objects. */
@@ -111,7 +235,7 @@ int main(void)
 //			  vQueueAddToRegistry( intHostTXQueue, (signed char *)"intHostTXQueue");
 
 
-	
+/*
 	for (i=0;i<N_CTL;i++)
 	{
 		if ((ctlInQ[i]=xQueueCreate(CTL_RX_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
@@ -119,13 +243,15 @@ int main(void)
 		if ((ctlOutQ[i]=xQueueCreate(CTL_TX_QUEUE_SIZE,sizeof(MSG_HDR)))!=NULL)
 			vQueueAddToRegistry( ctlOutQ[i], (signed char *)ctlTxServerQueueName[i]);
 	}
-
+*/
 
 	/* Start Root Task task */
 	xTaskCreate(root_task,( signed char * ) "root", configMINIMAL_STACK_SIZE*2, NULL, ROOT_TASK_PRIO, &rootTaskHndl);
 
 	/* Start scheduler */
 	vTaskStartScheduler();
+
+
 
   /* We should never get here as control is now taken by the scheduler */
   for( ;; );

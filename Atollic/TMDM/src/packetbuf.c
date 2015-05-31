@@ -26,6 +26,8 @@
 *
 * @return pointer to allocated buffer, NULL if no buffers
 *
+* getPacketBuffer(p->pool,FIRST_PACKET_SEGMENT|LAST_PACKET_SEGMENT, HOST_NETWORK, UNDEFINED_FORMAT, 0);
+*
 * @date 11.01.2011
 */
 PACKETBUF_HDR *getPacketBuffer(void *memPool, unsigned char flags, unsigned char type, unsigned short format,unsigned short doffset)

@@ -19,6 +19,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
+#include "Mcc_SPI.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -33,6 +34,9 @@
 uint16_t capture_4 = 0;
 uint16_t capture_3 = 0;
 
+
+uint16_t IqFdbDriveAz=0;
+uint16_t EncoderValDriveAz=0;
 
 extern __IO uint16_t T3_CCR1_Val;
 extern __IO uint16_t T4_CCR1_Val;
@@ -73,6 +77,7 @@ int __eTH_IRQHandler(void * arg)
 
 int __sPI1_IRQHandler (void * arg)
 {
+
 	PACKETBUF_HDR *pktBuf=NULL;
 	portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
 	MSG_HDR msg;
@@ -141,6 +146,7 @@ int __sPI1_IRQHandler (void * arg)
 	}
 
 	return doYield;
+
 }
 
 
@@ -212,7 +218,125 @@ int __tIM3_IRQHandler(void * arg)
   return doYield;
 }
 
+int __sPI2_IRQHandler (void * arg)
+{
+
+	SPI_I2S_SendData(SPI2,Iref);
+	if (SPI_I2S_GetITStatus(SPI2, SPI_I2S_IT_RXNE) == SET)
+	{
+		SPI_ClearITPendingBit(SPI2,SPI_I2S_IT_RXNE);
+		IqFdbDriveAz=SPI2->DR;
+	}
+//	if((SPI_I2S_GetITStatus(SPI2, SPI_I2S_IT_OVR) == SET)
+	return 0;
+}
+
+#ifdef KUKU
+int __DMA2_Stream2_IRQHandler(void * arg)
+{
+	PACKETBUF_HDR *pktBuf=NULL;
+	portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
+	MSG_HDR msg;
+	int doYield=0;
+	uint16_t CheckSum=0;
+	static uint16_t Counter=0;
+
+	if (DMA_GetITStatus(DMA2_Stream2, DMA_IT_TCIF2) == SET)                       //if Interrupt flag set
+		{
+			DMA_ClearITPendingBit(DMA2_Stream2,DMA_IT_TCIF2);                     //Clear Flag
+			pktBuf=handleRxFromHostDMA((char*)SPI1_RxArray,0, &intHost.rxPack);
+			if(pktBuf)/// Return not NULL, so packet has constructed
+			{
+				msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_SPI, MSG_TYPE_EVENT);
+				msg.data=0;
+				msg.buf=pktBuf;
+
+				xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
 
 
+#ifdef KUKU
+				if(xQueueIsQueueFullFromISR(DriveIntQueue))
+				{
+					QueStatus++;
+				}
 
+				if( xHigherPriorityTaskWoken )
+				{
+					doYield=1;	                                                  // Actual macro used here is port specific.
+				}
+				else
+				{
+					doYield=0;
+				}
+#endif
+			}
+			else
+				Counter++;
+
+	}
+	return doYield;
+}
+#endif
+
+int __DMA2_Stream2_IRQHandler(void * arg)
+{
+	PACKETBUF_HDR *pktBuf=NULL;
+	portBASE_TYPE xHigherPriorityTaskWoken= pdFALSE;
+	MSG_HDR msg;
+	int doYield=0;
+	uint16_t CheckSum=0;
+	static uint16_t Counter=0;
+
+	if (DMA_GetITStatus(DMA2_Stream2, DMA_IT_TCIF2) == SET)                       //if Interrupt flag set
+		{
+			DMA_ClearITPendingBit(DMA2_Stream2,DMA_IT_TCIF2);                     //Clear Flag
+
+			pktBuf=handleRxFromHostDMA((uint16_t*)SPI1_RxArray,0, &intHost.rxPack);
+			if(pktBuf)/// Return not NULL, so packet has constructed
+			{
+				msg.hdr.all=MAKE_MSG_HDRTYPE(0, MSG_SRC_ISR_SPI, MSG_TYPE_EVENT);
+				msg.data=0;
+				msg.buf=pktBuf;
+				xQueueSendFromISR(DriveIntQueue,&msg,&xHigherPriorityTaskWoken);
+			}
+			else
+				Counter++;
+
+	}
+	return doYield;
+}
+
+
+/*  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%               DMA1,stream0    interrupt handler - section starts here [Elevation Motor]                                               %
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%	*/
+
+int __DMA1_Stream0_IRQHandler(void * arg)
+{
+	if (DMA_GetITStatus(DMA1_Stream0, DMA_IT_TCIF0) == SET)
+		{
+		DMA_ClearITPendingBit(DMA1_Stream0,DMA_IT_TCIF0);
+		//feedForWard
+		SPI3_TxArrayAZ[0]=IrefEl;
+		SPI3_TxArrayAZ[1]=EnableElevation;
+		}
+	return 0;
+}
+
+/*  %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%               DMA1,stream3    interrupt handler - section starts here [Azimuth Motor]                                                 %
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%*/
+
+int __DMA1_Stream3_IRQHandler(void * arg)//Sent Current command to Drive Azimuth
+{
+	if (DMA_GetITStatus(DMA1_Stream3, DMA_IT_TCIF3) == SET)
+		{
+		DMA_ClearITPendingBit(DMA1_Stream3,DMA_IT_TCIF3);
+		//feedForWard
+		SPI2_TxArrayAZ[0]=Iref;
+		SPI2_TxArrayAZ[1]=EnableAzimuth;
+		}
+
+	return 0;
+}
 
