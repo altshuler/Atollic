@@ -121,10 +121,18 @@ extern "C" {
 #define SPI3_SCK_GPIO_CLK				RCC_AHB1Periph_GPIOB
 #define SPI3_SCK_PIN_SOURCE				GPIO_PinSource3
 
+#ifdef KUKU
 #define TP2_PIN							GPIO_Pin_4
 #define TP2_GPIO_PORT					GPIOB
 #define TP2_GPIO_CLK					RCC_AHB1Periph_GPIOB
 #define TP2_PIN_SOURCE					GPIO_PinSource4
+#endif
+
+
+#define CTL_FAN_15V_PIN				    GPIO_Pin_4
+#define CTL_FAN_15V_GPIO_PORT			GPIOB
+#define CTL_FAN_15V_GPIO_CLK			RCC_AHB1Periph_GPIOB
+#define CTL_FAN_15V_PIN_SOURCE			GPIO_PinSource4
 
 #define LED1_PIN						GPIO_Pin_5
 #define LED1_GPIO_PORT					GPIOB
@@ -247,11 +255,17 @@ extern "C" {
 #define SPI3_MISO_GPIO_CLK				RCC_AHB1Periph_GPIOC
 #define SPI3_MISO_PIN_SOURCE			GPIO_PinSource11
 
+#define SPI3_MOSI_PIN					GPIO_Pin_12
+#define SPI3_MOSI_GPIO_PORT			        GPIOC
+#define SPI3_MOSI_GPIO_CLK			    RCC_AHB1Periph_GPIOC
+#define SPI3_MOSI_PIN_SOURCE			    GPIO_PinSource12
+
+#ifdef KUKU
 #define CTL_FAN_15V_PIN					GPIO_Pin_12
 #define CTL_FAN_15V_GPIO_PORT			GPIOC
 #define CTL_FAN_15V_GPIO_CLK			RCC_AHB1Periph_GPIOC
 #define CTL_FAN_15V_PIN_SOURCE			GPIO_PinSource12
-
+#endif
 
 
 /*

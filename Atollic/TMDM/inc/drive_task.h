@@ -193,7 +193,8 @@ typedef union
 	sMCC_DATA_IN bit;
 }uMCC_IN;
 
-
+extern uint16_t MccDataOut[14];
+extern uint16_t AZ_Motor_Enable;
 
 #ifdef __cplusplus
 	extern "C" {

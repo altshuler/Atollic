@@ -45,7 +45,9 @@ struct sPacketBufHdr
 
 typedef struct sPacketBufHdr PACKETBUF_HDR;
 
-#define PACKETBUF_DATA(ptr) (unsigned char *)(&((PACKETBUF_HDR *)ptr)[1])
+#define PACKETBUF_DATA(ptr) (unsigned short *)(&((PACKETBUF_HDR *)ptr)[1])
+
+//#define PACKETBUF_DATA(ptr) (unsigned char *)(&((PACKETBUF_HDR *)ptr)[1])
 #define PACKETBUF_OFFSET_DATA(ptr,offset) &((PACKETBUF_DATA(ptr))[offset])
 
 PACKETBUF_HDR *getPacketBuffer(void *memPool, unsigned char flags, unsigned char type, unsigned short format, unsigned short doffset);

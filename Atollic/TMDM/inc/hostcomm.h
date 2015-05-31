@@ -29,7 +29,7 @@ struct sToHost_packetizerStat
 struct sFromHost_packetizer
 {
 	uint8_t	 FieldLen;		// field length				E.A line added
-	uint8_t	 FieldCnt;		//field bytes counter			E.A line added
+	uint8_t	 FieldCnt;		//field bytes counter		E.A line added
 	uint16_t chksum;		//calculated checksum		E.A line added
 	uint16_t ReceivedChksum;//calculated checksum		E.A line added
 	uint32_t FrameSize;		//Frame size				E.A line added
@@ -183,12 +183,14 @@ void uart0_HostRxHandler(void);
 void uart1_HostRxHandler(void);
 int handleRxTimeoutFromHost(struct sFromHost_packetizer *p);
 PACKETBUF_HDR *handleRxFromHost(char rxChar, TIMESTAMP rxTS, struct sFromHost_packetizer *p);
+PACKETBUF_HDR *handleRxFromHostDMA(uint16_t * rxCharp, TIMESTAMP rxTS, struct sFromHost_packetizer *p);
 void initHostTxStat(struct sToHost_packetizerStat *stat);
 void updateHostTxStat(struct sToHost_packetizerStat *stat, PACKETBUF_HDR *p);
 int isHostCmdPacket(PACKETBUF_HDR *p);
 int HandleRxTimeoutFromHost(struct sFromHost_packetizer *p);
 char upper_to_lower(char *pt,char len); 
-void hostPutInBuffer(struct sFromHost_packetizer *p, char rxChar, TIMESTAMP rxTS);
+//void hostPutInBuffer(struct sFromHost_packetizer *p, char rxChar, TIMESTAMP rxTS);
+void hostPutInBuffer(struct sFromHost_packetizer *p, uint16_t rxChar, TIMESTAMP rxTS);
 void ResetHostPacketizer(struct sFromHost_packetizer *p);
 
 

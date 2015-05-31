@@ -57,13 +57,14 @@
 //#define SPI_TX_TASK_PRIO     ( tskIDLE_PRIORITY + 6 )		// E.A. Line added
 #define DRIVE_TX_TASK_PRIO  ( tskIDLE_PRIORITY + 11 )		// E.A. Line added
 #define DRIVE_RX_TASK_PRIO  ( tskIDLE_PRIORITY + 12 )		// E.A. Line added
-#define DRIVE_INT_TASK_PRIO ( tskIDLE_PRIORITY + 10 )		// E.A. Line added
+
 
 #define MOTION_TASK_PRIO    ( tskIDLE_PRIORITY + 6 )		// E.A. Line added
 #define READ_TX_TASK_PRIO   ( tskIDLE_PRIORITY + 9 )		// E.A. Line added
 #define READ_RX_TASK_PRIO   ( tskIDLE_PRIORITY + 2 )		// E.A. Line added
 #define ENC_TASK_PRIO		( tskIDLE_PRIORITY + 8 )		// E.A. Line added
 
+#define DRIVE_INT_TASK_PRIO ( tskIDLE_PRIORITY + 14 )		// 10 E.A. Line added
 #define ROOT_TASK_PRIO    	( tskIDLE_PRIORITY + 15 )		// E.A. Line added
 
 
@@ -88,7 +89,7 @@ extern const char *ctlTxServerQueueName[N_CTL];
 #define HCMD_QUEUE_SIZE			8
 #define CTL_TX_QUEUE_SIZE 		16
 #define CTL_RX_QUEUE_SIZE 		8
-#define DRIVE_INT_QUEUE_SIZE 	8
+#define DRIVE_INT_QUEUE_SIZE 	16
 #define MOTION_QUEUE_SIZE 		8
 #define HOST_TX_QUEUE_SIZE 		5//8
 #define READOUT_TX_QUEUE_SIZE	8
